@@ -1,5 +1,5 @@
 
-const User = require('../models/User');
+const { findUserByEmail, createUser, getUser } = require('../services/firestore');
 const bcrypt = require('bcryptjs');
 
 // REGISTER USER
@@ -16,7 +16,7 @@ const registerUser = async (req, res) => {
         }
 
         // Check whether user already exists
-        const existingUser = await User.findOne({ email });
+        const existingUser = await findUserByEmail(email);
 
         if (existingUser) {
             return res.status(409).json({
@@ -29,7 +29,7 @@ const registerUser = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
 
         // Create new user
-        const user = await User.create({
+        const user = await createUser({
             name,
             email,
             password: hashedPassword
@@ -48,6 +48,12 @@ const registerUser = async (req, res) => {
         });
 
     } catch (error) {
+        if (error.code === 'EMAIL_EXISTS') {
+            return res.status(409).json({
+                success: false,
+                message: 'User already exists'
+            });
+        }
         console.error('Registration error:', error);
 
         res.status(500).json({
@@ -73,9 +79,7 @@ const loginUser = async (req, res) => {
         }
 
         // Find user
-        const user = await User.findOne({
-            email: email.toLowerCase()
-        });
+        const user = await findUserByEmail(email);
 
         if (!user) {
             return res.status(401).json({
@@ -126,7 +130,20 @@ const loginUser = async (req, res) => {
     }
 };
 
-module.exports = { registerUser, loginUser };
+const getProfile = async (req, res) => {
+    try {
+        const user = await getUser(req.user.id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+        const { password, ...publicUser } = user;
+        res.status(200).json({ success: true, user: publicUser });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Failed to fetch profile' });
+    }
+};
+
+module.exports = { registerUser, loginUser, getProfile };
 
 
 

@@ -1,11 +1,12 @@
 
 import { useEffect, useState } from 'react';
 import {
-    Leaf, Route, MapPin, Cloud, TrendingDown,
-    LayoutDashboard, History, Settings, LogOut
+    Leaf, Route, MapPin, Cloud, TrendingDown
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import API from '../services/api';
+import Sidebar from '../components/Sidebar';
 
 function Dashboard() {
     const navigate = useNavigate();
@@ -18,12 +19,16 @@ function Dashboard() {
     });
 
     const [loading, setLoading] = useState(true);
+    const [charts, setCharts] = useState({ timeSeries: [], transportModes: [] });
+    const [greenStreak, setGreenStreak] = useState(0);
 
     useEffect(() => {
         const fetchStats = async () => {
             try {
                 const response = await API.get('/dashboard/stats');
                 setStats(response.data.stats);
+                setCharts(response.data.charts || { timeSeries: [], transportModes: [] });
+                setGreenStreak(response.data.greenStreak || 0);
             } catch (error) {
                 console.error('Failed to fetch dashboard:', error);
             } finally {
@@ -33,12 +38,6 @@ function Dashboard() {
 
         fetchStats();
     }, []);
-
-    const logout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        navigate('/login');
-    };
 
     const cards = [
         {
@@ -70,54 +69,7 @@ function Dashboard() {
     return (
         <div className="min-h-screen bg-slate-50 flex">
 
-            {/* Sidebar */}
-            <aside className="w-64 bg-white border-r p-6 hidden md:flex flex-col">
-                <div className="flex items-center gap-2 mb-10">
-                    <Leaf className="text-green-700" size={30} />
-                    <h1 className="text-2xl font-bold text-green-800">
-                        EcoRoute
-                    </h1>
-                </div>
-
-                <nav className="space-y-3 flex-1">
-                    <div className="flex items-center gap-3 bg-green-100 text-green-800 p-3 rounded-lg font-semibold">
-                        <LayoutDashboard size={20} />
-                        Dashboard
-                    </div>
-
-                    <button
-                        onClick={() => navigate('/route-planner')}
-                        className="flex items-center gap-3 p-3 w-full hover:bg-green-50 rounded-lg text-gray-600"
-                    >
-                        <MapPin size={20} />
-                        Route Planner
-                    </button>
-
-                    <button
-                        onClick={() => navigate('/history')}
-                        className="flex items-center gap-3 p-3 w-full hover:bg-green-50 rounded-lg text-gray-600"
-                    >
-                        <History size={20} />
-                        Journey History
-                    </button>
-
-                    <button
-                        onClick={() => navigate('/profile')}
-                        className="flex items-center gap-3 p-3 w-full hover:bg-green-50 rounded-lg text-gray-600"
-                    >
-                        <Settings size={20} />
-                        Preferences
-                    </button>
-                </nav>
-
-                <button
-                    onClick={logout}
-                    className="flex items-center gap-3 p-3 text-red-600 hover:bg-red-50 rounded-lg"
-                >
-                    <LogOut size={20} />
-                    Logout
-                </button>
-            </aside>
+            <Sidebar />
 
             {/* Main Content */}
             <main className="flex-1 p-6 md:p-10">
@@ -208,6 +160,50 @@ function Dashboard() {
                         You have saved {stats.totalCarbonSaved} kg CO₂e
                         through your recorded journeys.
                     </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5">
+                        <div className="bg-green-50 rounded-lg p-4">
+                            <p className="text-sm text-gray-500">Equivalent trees / year</p>
+                            <p className="text-2xl font-bold text-green-800">{(stats.totalCarbonSaved / 21).toFixed(1)}</p>
+                        </div>
+                        <div className="bg-green-50 rounded-lg p-4">
+                            <p className="text-sm text-gray-500">Petrol avoided</p>
+                            <p className="text-2xl font-bold text-green-800">{(stats.totalCarbonSaved / 2.31).toFixed(1)} L</p>
+                        </div>
+                        <div className="bg-green-50 rounded-lg p-4">
+                            <p className="text-sm text-gray-500">Green streak</p>
+                            <p className="text-2xl font-bold text-green-800">{greenStreak} days</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-8">
+                    <div className="bg-white border rounded-xl p-6">
+                        <h3 className="text-lg font-bold text-gray-800 mb-4">Monthly carbon impact</h3>
+                        <div className="h-72">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={charts.timeSeries}>
+                                    <XAxis dataKey="period" />
+                                    <YAxis />
+                                    <Tooltip />
+                                    <Area type="monotone" dataKey="carbonEmission" stroke="#ef4444" fill="#fee2e2" name="Emitted" />
+                                    <Area type="monotone" dataKey="carbonSaved" stroke="#16a34a" fill="#dcfce7" name="Saved" />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                    <div className="bg-white border rounded-xl p-6">
+                        <h3 className="text-lg font-bold text-gray-800 mb-4">Distance by transport mode</h3>
+                        <div className="h-72">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={charts.transportModes}>
+                                    <XAxis dataKey="mode" />
+                                    <YAxis />
+                                    <Tooltip />
+                                    <Bar dataKey="distance" fill="#16a34a" name="Distance (km)" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
                 </div>
 
             </main>

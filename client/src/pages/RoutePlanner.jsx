@@ -76,6 +76,10 @@ function RoutePlanner() {
   const [routeError, setRouteError] = useState('');
 
   const [selectedMode, setSelectedMode] = useState('car');
+  const [baselineVehicle, setBaselineVehicle] = useState('petrol-car');
+  const [travelPreference, setTravelPreference] = useState('balanced');
+  const [savedPlaces, setSavedPlaces] = useState([]);
+  const [savedModes, setSavedModes] = useState({});
 
   const [routeOptions, setRouteOptions] = useState({
     car: null,
@@ -85,13 +89,27 @@ function RoutePlanner() {
   });
 
   const transportModes = [
-    { name: 'Bus', icon: Bus, factor: 0.08 },
-    { name: 'Train', icon: Train, factor: 0.04 },
-    { name: 'Metro', icon: TrainFront, factor: 0.035 },
-    { name: 'Car', icon: Car, factor: 0.17 },
-    { name: 'Bicycle', icon: Bike, factor: 0 },
-    { name: 'Walking', icon: Footprints, factor: 0 }
+    { name: 'Bus', mode: 'bus', icon: Bus, factor: 0.08 },
+    { name: 'Train', mode: 'train', icon: Train, factor: 0.04 },
+    { name: 'Metro', mode: 'metro', icon: TrainFront, factor: 0.035 },
+    { name: 'Car', mode: 'car', icon: Car, factor: 0.17 },
+    { name: 'Two-wheeler', mode: 'two-wheeler', icon: Bike, factor: 0.05 },
+    { name: 'Auto-rickshaw', mode: 'auto-rickshaw', icon: Car, factor: 0.09 },
+    { name: 'EV car', mode: 'ev-car', icon: Car, factor: 0.05 },
+    { name: 'EV scooter', mode: 'ev-scooter', icon: Bike, factor: 0.02 },
+    { name: 'Bicycle', mode: 'bike', icon: Bike, factor: 0 },
+    { name: 'Walking', mode: 'walking', icon: Footprints, factor: 0 },
+    { name: 'Multimodal', mode: 'multimodal', icon: TrainFront, factor: 0.04 }
   ];
+
+  useEffect(() => {
+    API.get('/auth/profile')
+      .then(res => {
+        setTravelPreference(res.data.user.travelPreference || 'balanced');
+        setSavedPlaces(res.data.user.savedPlaces || []);
+      })
+      .catch(() => {});
+  }, []);
 
   // Fetch Mappls SDK token from backend if not provided via env
   useEffect(() => {
@@ -121,6 +139,7 @@ function RoutePlanner() {
       });
       setRouteCoordinates([]);
       setRouteInfo(null);
+      setSavedModes({});
       return;
     }
 
@@ -238,28 +257,58 @@ function RoutePlanner() {
           }
 
           const emission = distance * mode.factor;
-          const carEmission = routeOptions.car.distance * 0.17;
+          const baselineFactors = {
+            'petrol-car': 0.17,
+            'diesel-car': 0.16,
+            'petrol-two-wheeler': 0.05,
+            'ev-car': 0.05,
+            'auto-rickshaw': 0.09
+          };
+          const baselineEmission = routeOptions.car.distance * (baselineFactors[baselineVehicle] ?? 0.17);
+          const costFactors = {
+            bus: 0.05,
+            train: 0.04,
+            metro: 0.035,
+            car: 10 / 15,
+            'two-wheeler': 10 / 45,
+            'auto-rickshaw': 12,
+            'ev-car': 1.8,
+            'ev-scooter': 0.3,
+            bike: 0,
+            walking: 0,
+            multimodal: 0.06
+          };
+          const cost = mode.mode === 'auto-rickshaw'
+            ? 30 + (distance * 16)
+            : distance * (costFactors[mode.mode] ?? 0);
+          const baselineCost = mode.mode === 'car'
+            ? distance * 10 / 15
+            : distance * (baselineFactors[baselineVehicle] === 0.05 ? 10 / 45 : 10 / 15);
 
           return {
             ...mode,
             distance: distance.toFixed(2),
             approximateDistance,
             emission: emission.toFixed(2),
-            carbonSaved: (carEmission - emission).toFixed(2)
+            carbonSaved: (baselineEmission - emission).toFixed(2),
+            cost: cost.toFixed(0),
+            costSaved: Math.max(0, baselineCost - cost).toFixed(0)
           };
         })
         .filter(Boolean)
     : [];
 
-  const bestMotorized = emissionResults
-    .filter((mode) => !['Bicycle', 'Walking'].includes(mode.name))
-    .reduce(
-      (best, current) =>
-        Number(current.emission) < Number(best.emission) ? current : best,
-      emissionResults.find(
-        (mode) => !['Bicycle', 'Walking'].includes(mode.name)
-      )
-    );
+  const rankedResults = [...emissionResults].sort((a, b) => {
+    if (travelPreference === 'lowest-carbon') {
+      return Number(a.emission) - Number(b.emission);
+    }
+    if (travelPreference === 'fastest') {
+      return a.mode === 'car' ? -1 : 1;
+    }
+    return (Number(a.emission) + Number(a.distance) * 0.01) -
+      (Number(b.emission) + Number(b.distance) * 0.01);
+  });
+  const recommendedMode = rankedResults[0]?.mode;
 
   async function searchLocation(query, type) {
     if (!query.trim()) {
@@ -307,6 +356,37 @@ function RoutePlanner() {
     }
 
     setError('');
+  }
+
+  async function saveJourney(mode) {
+    if (!origin || !destination) return;
+    try {
+      const legs = mode.mode === 'multimodal'
+        ? [
+            { mode: 'walking', distance: 0.5, duration: 8, carbonEmission: 0 },
+            { mode: 'metro', distance: Number(mode.distance), duration: routeInfo?.duration || 0, carbonEmission: Number(mode.emission) },
+            { mode: 'walking', distance: 0.5, duration: 8, carbonEmission: 0 }
+          ]
+        : [];
+      await API.post('/journeys', {
+        origin: { name: origin.name, coordinates: { lat: origin.lat, lng: origin.lon } },
+        destination: { name: destination.name, coordinates: { lat: destination.lat, lng: destination.lon } },
+        transportMode: mode.mode,
+        distance: Number(mode.distance),
+        duration: routeInfo?.duration || 0,
+        carbonEmission: Number(mode.emission),
+        carbonSaved: Math.max(0, Number(mode.carbonSaved)),
+        preference: travelPreference,
+        legs
+      });
+      setSavedModes(current => ({ ...current, [mode.mode]: true }));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not save journey');
+    }
+  }
+
+  function applySavedPlace(place, type) {
+    selectLocation({ name: place.name, lat: place.lat, lon: place.lon }, type);
   }
 
   return (
@@ -373,6 +453,15 @@ function RoutePlanner() {
                   ))}
                 </div>
               )}
+              {savedPlaces.length > 0 && (
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  {savedPlaces.map(place => (
+                    <button key={place.label} onClick={() => applySavedPlace(place, 'origin')} className="text-xs bg-green-50 text-green-800 px-3 py-2 rounded-full">
+                      {place.label}: {place.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Destination */}
@@ -423,6 +512,15 @@ function RoutePlanner() {
                   ))}
                 </div>
               )}
+              {savedPlaces.length > 0 && (
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  {savedPlaces.map(place => (
+                    <button key={place.label} onClick={() => applySavedPlace(place, 'destination')} className="text-xs bg-green-50 text-green-800 px-3 py-2 rounded-full">
+                      {place.label}: {place.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -446,6 +544,16 @@ function RoutePlanner() {
           <h2 className="text-lg font-semibold text-green-800 mb-4">
             Select Travel Mode
           </h2>
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-2">Baseline vehicle</label>
+            <select value={baselineVehicle} onChange={e => setBaselineVehicle(e.target.value)} className="border rounded-lg px-3 py-2">
+              <option value="petrol-car">Petrol Car — 0.17 kg/km</option>
+              <option value="diesel-car">Diesel Car — 0.16 kg/km</option>
+              <option value="petrol-two-wheeler">Petrol Two-Wheeler — 0.05 kg/km</option>
+              <option value="ev-car">EV Car — 0.05 kg/km</option>
+              <option value="auto-rickshaw">Auto-Rickshaw — 0.09 kg/km</option>
+            </select>
+          </div>
 
           <div className="grid grid-cols-3 gap-3">
             {[
@@ -492,15 +600,15 @@ function RoutePlanner() {
                 <div
                   key={mode.name}
                   className={`relative border rounded-xl p-5 transition ${
-                    mode.name === bestMotorized?.name
+                    mode.mode === recommendedMode
                       ? 'border-green-500 bg-green-50 shadow-md'
                       : 'border-gray-200 hover:border-green-400'
                   }`}
                 >
-                  {mode.name === bestMotorized?.name && (
+                  {mode.mode === recommendedMode && (
                     <span className="inline-flex items-center gap-1 bg-green-700 text-white text-xs font-semibold px-3 py-1 rounded-full mb-3">
                       <span>✓</span>
-                      Best Motorized Option
+                      Recommended
                     </span>
                   )}
 
@@ -536,10 +644,23 @@ function RoutePlanner() {
                   {mode.name !== 'Car' && (
                     <p className="text-sm text-green-700 mt-3 font-medium">
                       {Number(mode.carbonSaved) > 0
-                        ? `${mode.carbonSaved} kg less than car`
-                        : 'Same as car baseline'}
+                        ? `${mode.carbonSaved} kg less than baseline`
+                        : 'Same as baseline'}
                     </p>
                   )}
+                  <p className="text-sm text-gray-700 mt-2">
+                    Estimated cost: ₹{mode.cost}
+                  </p>
+                  {Number(mode.costSaved) > 0 && (
+                    <p className="text-sm text-green-700">₹{mode.costSaved} saved</p>
+                  )}
+                  <button
+                    onClick={() => saveJourney(mode)}
+                    disabled={savedModes[mode.mode]}
+                    className="mt-4 w-full rounded-lg bg-green-700 text-white py-2 disabled:bg-green-200 disabled:text-green-800"
+                  >
+                    {savedModes[mode.mode] ? 'Saved' : 'Save Journey'}
+                  </button>
                 </div>
               ))}
             </div>

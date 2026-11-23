@@ -8,9 +8,11 @@ const {
 } = require('../controllers/journeyController');
 
 const protect = require('../middleware/authMiddleware');
+const validateRequest = require('../middleware/validationMiddleware');
+const { saveJourneyValidator, journeyIdValidator } = require('../validators/journeyValidator');
 
-router.post('/', protect, saveJourney);
+router.post('/', protect, saveJourneyValidator, validateRequest, saveJourney);
 router.get('/', protect, getMyJourneys);
-router.delete('/:id', protect, deleteJourney);
+router.delete('/:id', protect, journeyIdValidator, validateRequest, deleteJourney);
 
 module.exports = router;

@@ -1,4 +1,4 @@
-const Journey = require('../models/Journey');
+const { createJourney, getUserJourneys, deleteUserJourney } = require('../services/firestore');
 
 // POST: Save a journey
 const saveJourney = async (req, res) => {
@@ -15,7 +15,7 @@ const saveJourney = async (req, res) => {
             legs
         } = req.body;
 
-        const journey = await Journey.create({
+        const journey = await createJourney({
             user: req.user.id,
             origin,
             destination,
@@ -45,9 +45,7 @@ const saveJourney = async (req, res) => {
 // GET: Retrieve logged-in user's journeys
 const getMyJourneys = async (req, res) => {
     try {
-        const journeys = await Journey.find({
-            user: req.user.id
-        }).sort({ createdAt: -1 });
+        const journeys = await getUserJourneys(req.user.id);
 
         res.status(200).json({
             success: true,
@@ -65,12 +63,9 @@ const getMyJourneys = async (req, res) => {
 // DELETE: Delete a saved journey
 const deleteJourney = async (req, res) => {
     try {
-        const journey = await Journey.findOneAndDelete({
-            _id: req.params.id,
-            user: req.user.id
-        });
+        const deleted = await deleteUserJourney(req.params.id, req.user.id);
 
-        if (!journey) {
+        if (!deleted) {
             return res.status(404).json({
                 success: false,
                 message: 'Journey not found'

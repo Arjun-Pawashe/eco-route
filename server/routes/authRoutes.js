@@ -6,8 +6,10 @@ const router = express.Router();
 
 const {
     registerUser,
-    loginUser
+    loginUser,
+    getProfile
 } = require('../controllers/authController');
+const protect = require('../middleware/authMiddleware');
 
 const validateRequest = require('../middleware/validationMiddleware');
 
@@ -19,35 +21,7 @@ const {
 router.post('/register', registerValidator, validateRequest, registerUser);
 
 router.post('/login', loginValidator, validateRequest, loginUser);
+router.get('/profile', protect, getProfile);
 
 module.exports = router;
-
-
-
-const protect = require('../middleware/authMiddleware');
-const User = require('../models/User');
-
-router.get('/profile', protect, async (req, res) => {
-    try {
-        const user = await User.findById(req.user.id).select('-password');
-
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
-        }
-
-        res.json({
-            success: true,
-            user
-        });
-
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Server error'
-        });
-    }
-});
 

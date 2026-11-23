@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
-const { updatePreferences } = require('../controllers/userController');
+const { updatePreferences, updateSavedPlaces } = require('../controllers/userController');
 const protect = require('../middleware/authMiddleware');
 const validateRequest = require('../middleware/validationMiddleware');
 
@@ -14,5 +14,6 @@ router.put(
     validateRequest,
     updatePreferences
 );
+router.put('/places', protect, updateSavedPlaces);
 
 module.exports = router;

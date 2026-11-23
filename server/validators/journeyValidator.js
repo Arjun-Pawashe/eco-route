@@ -1,39 +1,22 @@
-const express = require('express');
-const router = express.Router();
+const { body, param } = require('express-validator');
 
-const {
-    saveJourney,
-    getMyJourneys,
-    deleteJourney
-} = require('../controllers/journeyController');
+const saveJourneyValidator = [
+    body('origin.name').trim().notEmpty().withMessage('Origin name is required'),
+    body('destination.name').trim().notEmpty().withMessage('Destination name is required'),
+    body('transportMode').isIn([
+        'bus', 'train', 'metro', 'car', 'bike', 'walking',
+        'two-wheeler', 'auto-rickshaw', 'ev-car', 'ev-scooter', 'multimodal'
+    ]),
+    body('distance').isFloat({ min: 0 }),
+    body('duration').isFloat({ min: 0 }),
+    body('carbonEmission').isFloat({ min: 0 })
+];
 
-const protect = require('../middleware/authMiddleware');
-const validateRequest = require('../middleware/validationMiddleware');
+const journeyIdValidator = [
+    param('id')
+        .isLength({ min: 1, max: 128 })
+        .matches(/^[A-Za-z0-9_-]+$/)
+        .withMessage('Invalid journey ID')
+];
 
-const {
-    saveJourneyValidator,
-    journeyIdValidator
-} = require('../validators/journeyValidator');
-
-// Save journey
-router.post(
-    '/',
-    protect,
-    saveJourneyValidator,
-    validateRequest,
-    saveJourney
-);
-
-// Get logged-in user's journeys
-router.get('/', protect, getMyJourneys);
-
-// Delete journey
-router.delete(
-    '/:id',
-    protect,
-    journeyIdValidator,
-    validateRequest,
-    deleteJourney
-);
-
-module.exports = router;
+module.exports = { saveJourneyValidator, journeyIdValidator };

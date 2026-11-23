@@ -3,16 +3,28 @@ const cors = require('cors');
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 require('dotenv').config();
 
-const connectDB = require('./config/db');
+const initializeFirebase = require('./config/db');
 
 const app = express();
 
 // Middleware
-app.use(cors());
+const allowedOrigins = [
+    process.env.CLIENT_URL,
+    'https://<your-project>.firebaseapp.com',
+    'https://<your-project>.web.app',
+    'http://localhost:5173'
+].filter(Boolean);
+
+app.use(cors({
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+        return callback(new Error('Origin not allowed by CORS'));
+    }
+}));
 app.use(express.json());
 
-// Connect MongoDB
-connectDB();
+// Initialize Firebase Admin / Firestore
+initializeFirebase();
 
 // Test route
 app.get('/', (req, res) => {

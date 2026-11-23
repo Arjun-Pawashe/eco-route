@@ -1,9 +1,12 @@
 const { calculateCarbon } = require('../utils/carbonCalculator');
 const compareRoutes = require('../utils/routeComparator');
+const { getUser } = require('../services/firestore');
 
 const planRoute = async (req, res) => {
     try {
-        const { origin, destination, preference = 'balanced' } = req.body;
+        const { origin, destination, preference } = req.body;
+        const user = await getUser(req.user.id);
+        const effectivePreference = preference || user?.travelPreference || 'balanced';
 
         if (!origin || !destination) {
             return res.status(400).json({
@@ -47,14 +50,14 @@ const planRoute = async (req, res) => {
 
         const rankedRoutes = compareRoutes(
             routesWithCarbon,
-            preference
+            effectivePreference
         );
 
         res.status(200).json({
             success: true,
             origin,
             destination,
-            preference,
+            preference: effectivePreference,
             routes: rankedRoutes
         });
 
