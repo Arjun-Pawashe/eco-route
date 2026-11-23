@@ -1,4 +1,61 @@
-function computeDashboardStats(journeyRows = []) {
+function computeBadgesAndGoal({
+    stats,
+    greenStreak,
+    timeSeries = [],
+    monthlyGoalKg = 25,
+    currentMonth
+}) {
+    const monthKey = currentMonth || new Date().toISOString().slice(0, 7);
+    const currentMonthEntry = timeSeries.find((row) => row.period === monthKey);
+    const savedThisMonth = currentMonthEntry ? Number(currentMonthEntry.carbonSaved) || 0 : 0;
+
+    const monthlyGoal = {
+        month: monthKey,
+        targetKg: monthlyGoalKg,
+        savedKg: Number(savedThisMonth.toFixed(2)),
+        percent:
+            monthlyGoalKg > 0
+                ? Math.min(100, Math.round((savedThisMonth / monthlyGoalKg) * 100))
+                : 0
+    };
+
+    const badges = [
+        {
+            id: 'first-green-trip',
+            label: 'First green trip',
+            description: 'Save CO₂e on a recorded journey',
+            earned: stats.totalCarbonSaved > 0
+        },
+        {
+            id: 'streak-7',
+            label: '7-day streak',
+            description: 'Log green journeys 7 days in a row',
+            earned: greenStreak >= 7
+        },
+        {
+            id: 'saved-50kg',
+            label: '50 kg saved',
+            description: 'Save 50 kg of CO₂e across all journeys',
+            earned: stats.totalCarbonSaved >= 50
+        },
+        {
+            id: 'distance-100km',
+            label: '100 km travelled',
+            description: 'Track 100 km of journeys',
+            earned: stats.totalDistance >= 100
+        },
+        {
+            id: 'journeys-10',
+            label: '10 journeys',
+            description: 'Log 10 journeys in EcoRoute',
+            earned: stats.totalJourneys >= 10
+        }
+    ];
+
+    return { badges, monthlyGoal };
+}
+
+function computeDashboardStats(journeyRows = [], options = {}) {
     const result = journeyRows.reduce(
         (total, journey) => ({
             totalJourneys: total.totalJourneys + 1,
@@ -66,28 +123,44 @@ function computeDashboardStats(journeyRows = []) {
         previous = current;
     }
 
+    const stats = {
+        totalJourneys: result.totalJourneys,
+        totalDistance: Number(result.totalDistance.toFixed(2)),
+        totalCarbonEmission: Number(result.totalCarbonEmission.toFixed(2)),
+        totalCarbonSaved: Number(result.totalCarbonSaved.toFixed(2))
+    };
+
+    const timeSeries = [...monthlyMap.values()]
+        .sort((a, b) => a.period.localeCompare(b.period))
+        .map((row) => ({
+            ...row,
+            carbonEmission: Number(row.carbonEmission.toFixed(2)),
+            carbonSaved: Number(row.carbonSaved.toFixed(2))
+        }));
+
+    const transportModes = [...modeMap.values()].map((row) => ({
+        ...row,
+        distance: Number(row.distance.toFixed(2))
+    }));
+
+    const { badges, monthlyGoal } = computeBadgesAndGoal({
+        stats,
+        greenStreak,
+        timeSeries,
+        monthlyGoalKg: options.monthlyGoalKg,
+        currentMonth: options.currentMonth
+    });
+
     return {
-        stats: {
-            totalJourneys: result.totalJourneys,
-            totalDistance: Number(result.totalDistance.toFixed(2)),
-            totalCarbonEmission: Number(result.totalCarbonEmission.toFixed(2)),
-            totalCarbonSaved: Number(result.totalCarbonSaved.toFixed(2))
-        },
+        stats,
         charts: {
-            timeSeries: [...monthlyMap.values()]
-                .sort((a, b) => a.period.localeCompare(b.period))
-                .map((row) => ({
-                    ...row,
-                    carbonEmission: Number(row.carbonEmission.toFixed(2)),
-                    carbonSaved: Number(row.carbonSaved.toFixed(2))
-                })),
-            transportModes: [...modeMap.values()].map((row) => ({
-                ...row,
-                distance: Number(row.distance.toFixed(2))
-            }))
+            timeSeries,
+            transportModes
         },
-        greenStreak
+        greenStreak,
+        badges,
+        monthlyGoal
     };
 }
 
-module.exports = { computeDashboardStats };
+module.exports = { computeDashboardStats, computeBadgesAndGoal };

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Leaf, Route, MapPin, Cloud, TrendingDown } from 'lucide-react';
+import { Leaf, Route, MapPin, Cloud, TrendingDown, Award, Target } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   AreaChart,
@@ -13,6 +13,7 @@ import {
 } from 'recharts';
 import API from '../services/api';
 import Sidebar from '../components/Sidebar';
+import { computeCarbonEquivalents } from '../utils/carbonCalculator';
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -27,6 +28,13 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [charts, setCharts] = useState({ timeSeries: [], transportModes: [] });
   const [greenStreak, setGreenStreak] = useState(0);
+  const [badges, setBadges] = useState([]);
+  const [monthlyGoal, setMonthlyGoal] = useState({
+    month: '',
+    targetKg: 25,
+    savedKg: 0,
+    percent: 0
+  });
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -35,6 +43,10 @@ function Dashboard() {
         setStats(response.data.stats);
         setCharts(response.data.charts || { timeSeries: [], transportModes: [] });
         setGreenStreak(response.data.greenStreak || 0);
+        setBadges(response.data.badges || []);
+        if (response.data.monthlyGoal) {
+          setMonthlyGoal(response.data.monthlyGoal);
+        }
       } catch (error) {
         console.error('Failed to fetch dashboard:', error);
       } finally {
@@ -44,6 +56,8 @@ function Dashboard() {
 
     fetchStats();
   }, []);
+
+  const equivalents = computeCarbonEquivalents(stats.totalCarbonSaved);
 
   const cards = [
     {
@@ -73,52 +87,56 @@ function Dashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F7FAF7] flex">
+    <div className="min-h-screen bg-[#F4F3F7] flex">
       <Sidebar />
 
       {/* Main Content */}
       <main className="flex-1 min-w-0 p-5 pt-20 pb-24 md:p-10 md:pt-10 md:pb-10">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-8">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-green-600 mb-2">Overview</p>
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-green-950">Dashboard</h2>
-            <p className="text-gray-500 mt-2 max-w-xl">
+            <p className="text-xs font-semibold text-[#644DFF] mb-1.5">Overview</p>
+            <h2 className="text-3xl md:text-4xl font-bold tracking-[-0.02em] text-[#111018]">
+              Impact <span className="text-[#644DFF]">Dashboard</span>
+            </h2>
+            <p className="text-[#6E6B7B] mt-2 max-w-xl text-sm">
               Track your journeys and environmental impact.
             </p>
           </div>
 
           <button
             onClick={() => navigate('/route-planner')}
-            className="bg-green-800 text-white px-5 py-3.5 rounded-2xl hover:bg-green-900 shadow-sm transition self-start sm:self-auto"
+            className="bg-[#644DFF] text-white font-semibold px-5 py-3 rounded-[10px] hover:bg-[#533CE6] shadow-sm transition self-start sm:self-auto cursor-pointer"
           >
             + Plan a Journey
           </button>
         </div>
 
         {/* Welcome Card */}
-        <div className="relative overflow-hidden bg-green-800 text-white rounded-[2rem] p-7 md:p-9 mb-8">
-          <div className="absolute -right-12 -top-16 w-52 h-52 rounded-full border-[34px] border-white/10" />
+        <div className="relative overflow-hidden bg-[#281950] text-white rounded-[20px] p-7 md:p-9 mb-8 border border-[#644DFF]/30">
+          <div className="absolute -right-12 -top-16 w-52 h-52 rounded-full border-[34px] border-[#644DFF]/25" />
           <div className="relative">
           <div className="flex items-center gap-3 mb-3">
-            <Leaf size={28} />
-            <span className="font-semibold">EcoRoute Impact</span>
+            <span className="w-8 h-8 rounded-[8px] bg-[#644DFF] flex items-center justify-center">
+              <Leaf size={18} className="text-white" />
+            </span>
+            <span className="font-semibold text-sm text-[#E5E0FF]">EcoRoute Impact</span>
           </div>
 
-          <h3 className="text-2xl font-bold">Every greener journey counts!</h3>
+          <h3 className="text-2xl font-bold tracking-[-0.02em]">Every greener journey counts</h3>
 
-          <p className="text-green-100 mt-2">
+          <p className="text-[#E5E0FF]/80 mt-2 text-sm">
             Choose smarter routes and contribute to a sustainable future.
           </p>
           </div>
         </div>
 
         {/* Statistics */}
-        <h3 className="text-xl font-bold text-gray-800 mb-5">
-          Your Travel Statistics
+        <h3 className="text-lg font-semibold text-[#111018] mb-4">
+          Travel Statistics
         </h3>
 
         {loading ? (
-          <p className="text-gray-500">Loading statistics...</p>
+          <p className="text-[#6E6B7B] text-sm">Loading statistics...</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
             {cards.map((card) => {
@@ -127,98 +145,163 @@ function Dashboard() {
               return (
                 <div
                   key={card.title}
-                  className="bg-white p-6 rounded-xl shadow-sm border border-gray-100"
+                  className="bg-[#FFFFFF] p-6 rounded-2xl border border-[#E4E1F2] shadow-sm"
                 >
                   <div className="flex justify-between items-center">
-                    <p className="text-gray-500 text-sm">{card.title}</p>
+                    <p className="text-[#6E6B7B] text-sm">{card.title}</p>
 
-                    <div className="bg-green-100 p-3 rounded-lg">
-                      <Icon className="text-green-700" size={22} />
+                    <div className="bg-[#E5E0FF] p-2.5 rounded-[10px]">
+                      <Icon className="text-[#644DFF]" size={20} />
                     </div>
                   </div>
 
-                  <h3 className="text-3xl font-bold text-gray-800 mt-5">
+                  <h3 className="text-3xl font-bold tracking-[-0.02em] text-[#111018] mt-5">
                     {card.value}
                   </h3>
 
-                  <p className="text-gray-400 text-sm mt-1">{card.unit}</p>
+                  <p className="text-[#9A96A6] text-xs mt-1">{card.unit}</p>
                 </div>
               );
             })}
           </div>
         )}
 
-        <div className="bg-white rounded-xl p-6 mt-8 border border-gray-100">
-          <h3 className="text-xl font-bold text-gray-800 mb-2">
-            Your Environmental Contribution
+        <div className="bg-[#FFFFFF] rounded-2xl p-6 mt-6 border border-[#E4E1F2] shadow-sm">
+          <h3 className="text-lg font-semibold text-[#111018] mb-1">
+            Environmental Contribution
           </h3>
 
-          <p className="text-gray-500">
+          <p className="text-[#6E6B7B] text-sm">
             You have saved {stats.totalCarbonSaved} kg CO₂e through your
             recorded journeys.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5">
-            <div className="bg-green-50 rounded-lg p-4">
-              <p className="text-sm text-gray-500">Equivalent trees / year</p>
-              <p className="text-2xl font-bold text-green-800">
-                {(stats.totalCarbonSaved / 21).toFixed(1)}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-5">
+            <div className="bg-[#D9F7F4] rounded-[12px] p-4">
+              <p className="text-xs font-medium text-[#0E9F96]">Trees / year (approx.)</p>
+              <p className="text-2xl font-bold text-[#111018] mt-1">
+                {equivalents.trees}
+              </p>
+              <p className="text-xs text-[#0E9F96] mt-1">approx. 21 kg CO₂/tree</p>
+            </div>
+            <div className="bg-[#E5E0FF] rounded-[12px] p-4">
+              <p className="text-xs font-medium text-[#5D45F8]">Phone charges (approx.)</p>
+              <p className="text-2xl font-bold text-[#111018] mt-1">
+                {equivalents.phoneCharges.toLocaleString()}
+              </p>
+              <p className="text-xs text-[#5D45F8] mt-1">approx. 0.008 kg/charge</p>
+            </div>
+            <div className="bg-[#F4F3F7] rounded-[12px] p-4 border border-[#E4E1F2]">
+              <p className="text-xs font-medium text-[#6E6B7B]">Petrol avoided (approx.)</p>
+              <p className="text-2xl font-bold text-[#111018] mt-1">
+                {equivalents.petrolLiters} L
               </p>
             </div>
-            <div className="bg-green-50 rounded-lg p-4">
-              <p className="text-sm text-gray-500">Petrol avoided</p>
-              <p className="text-2xl font-bold text-green-800">
-                {(stats.totalCarbonSaved / 2.31).toFixed(1)} L
-              </p>
-            </div>
-            <div className="bg-green-50 rounded-lg p-4">
-              <p className="text-sm text-gray-500">Green streak</p>
-              <p className="text-2xl font-bold text-green-800">
+            <div className="bg-[#F4F3F7] rounded-[12px] p-4 border border-[#E4E1F2]">
+              <p className="text-xs font-medium text-[#6E6B7B]">Green streak</p>
+              <p className="text-2xl font-bold text-[#111018] mt-1">
                 {greenStreak} days
               </p>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-8">
-          <div className="bg-white border rounded-xl p-6">
-            <h3 className="text-lg font-bold text-gray-800 mb-4">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6">
+          <div className="bg-[#FFFFFF] rounded-2xl p-6 border border-[#E4E1F2] shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Target className="text-[#644DFF]" size={20} />
+                <h3 className="text-lg font-semibold text-[#111018]">
+                  Monthly CO₂ Savings Goal
+                </h3>
+              </div>
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-[8px] bg-[#E5E0FF] text-[#5D45F8]">
+                {monthlyGoal.percent}%
+              </span>
+            </div>
+            <p className="text-sm text-[#6E6B7B] mb-3">
+              {monthlyGoal.savedKg} / {monthlyGoal.targetKg} kg CO₂e saved
+              {monthlyGoal.month ? ` (${monthlyGoal.month})` : ''}
+            </p>
+            <div className="w-full h-3 bg-[#ECEAF3] rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[#644DFF] rounded-full transition-all"
+                style={{ width: `${monthlyGoal.percent}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="bg-[#FFFFFF] rounded-2xl p-6 border border-[#E4E1F2] shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <Award className="text-[#644DFF]" size={20} />
+              <h3 className="text-lg font-semibold text-[#111018]">
+                Eco Badges
+              </h3>
+            </div>
+            {badges.length === 0 ? (
+              <p className="text-sm text-[#6E6B7B]">
+                Log journeys to start earning badges.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {badges.map((badge) => (
+                  <div
+                    key={badge.id}
+                    title={badge.description}
+                    className={`px-3 py-1.5 rounded-[8px] text-xs font-semibold ${
+                      badge.earned
+                        ? 'bg-[#D9F7F4] text-[#0E9F96]'
+                        : 'bg-[#ECEAF3] text-[#6E6B7B]'
+                    }`}
+                  >
+                    {badge.earned ? '✓ ' : ''}
+                    {badge.label}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6">
+          <div className="bg-[#FFFFFF] border border-[#E4E1F2] rounded-2xl p-6 shadow-sm">
+            <h3 className="text-lg font-semibold text-[#111018] mb-4">
               Monthly carbon impact
             </h3>
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={charts.timeSeries}>
-                  <XAxis dataKey="period" />
-                  <YAxis />
+                  <XAxis dataKey="period" stroke="#9A96A6" fontSize={12} />
+                  <YAxis stroke="#9A96A6" fontSize={12} />
                   <Tooltip />
                   <Area
                     type="monotone"
                     dataKey="carbonEmission"
-                    stroke="#ef4444"
-                    fill="#fee2e2"
+                    stroke="#FF5D47"
+                    fill="#FCE4E1"
                     name="Emitted"
                   />
                   <Area
                     type="monotone"
                     dataKey="carbonSaved"
-                    stroke="#16a34a"
-                    fill="#dcfce7"
+                    stroke="#644DFF"
+                    fill="#E5E0FF"
                     name="Saved"
                   />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>
-          <div className="bg-white border rounded-xl p-6">
-            <h3 className="text-lg font-bold text-gray-800 mb-4">
+          <div className="bg-[#FFFFFF] border border-[#E4E1F2] rounded-2xl p-6 shadow-sm">
+            <h3 className="text-lg font-semibold text-[#111018] mb-4">
               Distance by transport mode
             </h3>
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={charts.transportModes}>
-                  <XAxis dataKey="mode" />
-                  <YAxis />
+                  <XAxis dataKey="mode" stroke="#9A96A6" fontSize={12} />
+                  <YAxis stroke="#9A96A6" fontSize={12} />
                   <Tooltip />
-                  <Bar dataKey="distance" fill="#16a34a" name="Distance (km)" />
+                  <Bar dataKey="distance" fill="#0E9F96" radius={[6, 6, 0, 0]} name="Distance (km)" />
                 </BarChart>
               </ResponsiveContainer>
             </div>

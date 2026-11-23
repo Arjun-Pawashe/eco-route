@@ -12,7 +12,7 @@ function ProtectedRoute() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-gray-500">
+      <div className="min-h-screen flex items-center justify-center bg-[#F4F3F7] text-[#6E6B7B] font-medium">
         Loading EcoRoute...
       </div>
     );
@@ -26,7 +26,7 @@ function HomeRedirect() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-gray-500">
+      <div className="min-h-screen flex items-center justify-center bg-[#F4F3F7] text-[#6E6B7B] font-medium">
         Loading EcoRoute...
       </div>
     );

@@ -66,36 +66,38 @@ function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#F7FAF7] px-4 py-10">
-      <div className="bg-white w-full max-w-md p-8 sm:p-10 rounded-[2rem] border border-green-100 shadow-[0_24px_70px_rgba(22,101,52,0.10)]">
+    <div className="min-h-screen flex items-center justify-center bg-[#F4F3F7] px-4 py-10">
+      <div className="bg-[#FFFFFF] w-full max-w-md p-8 sm:p-10 rounded-[20px] border-2 border-[#281950] shadow-[0_20px_60px_rgba(40,25,80,0.10)]">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-3">
-            <div className="bg-green-100 p-3 rounded-xl">
-              <Leaf size={32} className="text-green-700" />
+            <div className="bg-[#E5E0FF] p-3 rounded-[12px]">
+              <Leaf size={28} className="text-[#644DFF]" />
             </div>
           </div>
 
-          <h1 className="text-3xl font-bold text-green-800">EcoRoute</h1>
+          <h1 className="text-3xl font-bold tracking-[-0.02em] text-[#111018]">
+            Eco<span className="text-[#644DFF]">Route</span>
+          </h1>
 
-          <p className="text-gray-500 mt-2">Smarter Routes. Greener Future.</p>
+          <p className="text-[#6E6B7B] mt-2 text-sm">Smarter Routes. Greener Future.</p>
         </div>
 
-        <h2 className="text-2xl font-semibold mb-2">Welcome Back!</h2>
+        <h2 className="text-xl font-semibold tracking-[-0.01em] text-[#111018] mb-1">Welcome Back</h2>
 
-        <p className="text-gray-500 mb-6">Login to continue your journey.</p>
+        <p className="text-[#6E6B7B] text-sm mb-6">Login to continue your journey.</p>
 
         {error && (
-          <p className="bg-red-100 text-red-700 p-3 rounded-lg mb-4">{error}</p>
+          <p className="bg-[#FCE4E1] text-[#D94A38] text-sm font-medium p-3 rounded-[10px] mb-4">{error}</p>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block mb-2 text-sm font-medium">
+            <label className="block mb-1.5 text-sm font-medium text-[#111018]">
               Email Address
             </label>
 
-            <div className="flex items-center border rounded-lg px-3">
-              <Mail size={18} className="text-gray-400" />
+            <div className="flex items-center bg-[#ECEAF3] rounded-[10px] px-3.5 focus-within:ring-2 focus-within:ring-[#644DFF]">
+              <Mail size={18} className="text-[#6E6B7B]" />
 
               <input
                 type="email"
@@ -104,16 +106,16 @@ function Login() {
                 value={formData.email}
                 onChange={handleChange}
                 required
-                className="w-full p-3 outline-none"
+                className="w-full p-3 bg-transparent text-[#111018] placeholder-[#9A96A6] outline-none"
               />
             </div>
           </div>
 
           <div>
-            <label className="block mb-2 text-sm font-medium">Password</label>
+            <label className="block mb-1.5 text-sm font-medium text-[#111018]">Password</label>
 
-            <div className="flex items-center border rounded-lg px-3">
-              <Lock size={18} className="text-gray-400" />
+            <div className="flex items-center bg-[#ECEAF3] rounded-[10px] px-3.5 focus-within:ring-2 focus-within:ring-[#644DFF]">
+              <Lock size={18} className="text-[#6E6B7B]" />
 
               <input
                 type="password"
@@ -122,7 +124,7 @@ function Login() {
                 value={formData.password}
                 onChange={handleChange}
                 required
-                className="w-full p-3 outline-none"
+                className="w-full p-3 bg-transparent text-[#111018] placeholder-[#9A96A6] outline-none"
               />
             </div>
           </div>
@@ -130,26 +132,26 @@ function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-green-700 text-white py-3 rounded-lg hover:bg-green-800 transition disabled:opacity-60"
+            className="w-full bg-[#644DFF] text-white font-semibold py-3 rounded-[10px] hover:bg-[#533CE6] transition disabled:opacity-60 cursor-pointer"
           >
             {loading ? 'Logging in...' : 'Login'}
           </button>
         </form>
 
-        <div className="mt-4">
+        <div className="mt-3">
           <button
             type="button"
             onClick={handleGoogleLogin}
             disabled={loading}
-            className="w-full border border-gray-300 text-gray-700 py-3 rounded-lg hover:bg-slate-50 transition disabled:opacity-60 font-medium"
+            className="w-full bg-white border-[1.5px] border-[#14121D] text-[#111018] py-3 rounded-[10px] hover:bg-[#F4F3F7] transition disabled:opacity-60 font-semibold cursor-pointer"
           >
             Continue with Google
           </button>
         </div>
 
-        <p className="text-center mt-6 text-gray-600">
+        <p className="text-center mt-6 text-sm text-[#6E6B7B]">
           Don't have an account?{' '}
-          <Link to="/register" className="text-green-700 font-semibold">
+          <Link to="/register" className="text-[#644DFF] font-semibold hover:underline">
             Register
           </Link>
         </p>

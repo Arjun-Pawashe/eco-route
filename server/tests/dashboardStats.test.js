@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { computeDashboardStats } = require('../utils/dashboardStats');
 
 test('computeDashboardStats handles empty journey list', () => {
-    const result = computeDashboardStats([]);
+    const result = computeDashboardStats([], { currentMonth: '2026-11' });
     assert.deepEqual(result.stats, {
         totalJourneys: 0,
         totalDistance: 0,
@@ -12,9 +12,12 @@ test('computeDashboardStats handles empty journey list', () => {
     });
     assert.deepEqual(result.charts, { timeSeries: [], transportModes: [] });
     assert.equal(result.greenStreak, 0);
+    assert.equal(result.monthlyGoal.savedKg, 0);
+    assert.equal(result.monthlyGoal.percent, 0);
+    assert.ok(result.badges.every((b) => b.earned === false));
 });
 
-test('computeDashboardStats aggregates totals, charts, and green streak', () => {
+test('computeDashboardStats aggregates totals, charts, green streak, badges, and monthly goal', () => {
     const journeys = [
         {
             transportMode: 'metro',
@@ -46,7 +49,10 @@ test('computeDashboardStats aggregates totals, charts, and green streak', () => 
         }
     ];
 
-    const result = computeDashboardStats(journeys);
+    const result = computeDashboardStats(journeys, {
+        currentMonth: '2026-11',
+        monthlyGoalKg: 25
+    });
     assert.equal(result.stats.totalJourneys, 4);
     assert.equal(result.stats.totalDistance, 35);
     assert.equal(result.stats.totalCarbonEmission, 2.53);
@@ -55,4 +61,12 @@ test('computeDashboardStats aggregates totals, charts, and green streak', () => 
     assert.equal(result.charts.timeSeries.length, 1);
     assert.equal(result.charts.timeSeries[0].period, '2026-11');
     assert.equal(result.charts.transportModes.length, 3);
+
+    assert.equal(result.monthlyGoal.savedKg, 3.42);
+    assert.equal(result.monthlyGoal.percent, 14);
+
+    const firstTrip = result.badges.find((b) => b.id === 'first-green-trip');
+    const streak7 = result.badges.find((b) => b.id === 'streak-7');
+    assert.equal(firstTrip.earned, true);
+    assert.equal(streak7.earned, false);
 });

@@ -6,9 +6,10 @@
 
 body {
     margin: 0;
-    font-family: Inter, "Segoe UI", Arial, sans-serif;
-    background: #F7FAF7;
-    color: #14532D;
+    font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: #F4F3F7;
+    color: #111018;
+    -webkit-font-smoothing: antialiased;
 }
 
 button,
@@ -23,6 +24,6 @@ a {
 }
 
 ::selection {
-    background: #DCFCE7;
-    color: #14532D;
+    background: #E5E0FF;
+    color: #281950;
 }

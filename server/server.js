@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
+const { createRateLimiter } = require('./middleware/rateLimitMiddleware');
 require('dotenv').config();
 
 const connectDB = require('./config/db');
@@ -30,6 +31,12 @@ app.use(cors({
 }));
 app.use(express.json());
 
+const mapplsLimiter = createRateLimiter({
+    windowMs: 15 * 60 * 1000,
+    max: 60,
+    message: 'Too many map requests, please try again in a few minutes.'
+});
+
 app.get('/', (req, res) => {
     res.send('Welcome to EcoRoute API!');
 });
@@ -41,7 +48,7 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-app.use('/api/mappls', mapplsRoutes);
+app.use('/api/mappls', mapplsLimiter, mapplsRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/journeys', journeyRoutes);
 app.use('/api/dashboard', dashboardRoutes);

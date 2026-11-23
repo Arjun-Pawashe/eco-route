@@ -12,6 +12,7 @@ import {
 import API from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import {
+  EMISSION_FACTORS,
   calculateEmissionResults,
   decodePolyline,
   rankEmissionResults
@@ -20,15 +21,40 @@ import MapView from '../components/MapView';
 import Sidebar from '../components/Sidebar';
 
 const TRANSPORT_MODES = [
-  { name: 'Bus', mode: 'bus', icon: Bus, factor: 0.08 },
-  { name: 'Train', mode: 'train', icon: Train, factor: 0.04 },
-  { name: 'Car', mode: 'car', icon: Car, factor: 0.17 },
-  { name: 'Two-wheeler', mode: 'two-wheeler', icon: Bike, factor: 0.05 },
-  { name: 'Auto-rickshaw', mode: 'auto-rickshaw', icon: Car, factor: 0.09 },
-  { name: 'EV car', mode: 'ev-car', icon: Car, factor: 0.05 },
-  { name: 'EV scooter', mode: 'ev-scooter', icon: Bike, factor: 0.02 },
-  { name: 'Bicycle', mode: 'bike', icon: Bike, factor: 0 },
-  { name: 'Walking', mode: 'walking', icon: Footprints, factor: 0 }
+  { name: 'Bus', mode: 'bus', icon: Bus, factor: EMISSION_FACTORS.bus },
+  { name: 'Train', mode: 'train', icon: Train, factor: EMISSION_FACTORS.train },
+  { name: 'Car', mode: 'car', icon: Car, factor: EMISSION_FACTORS.car },
+  {
+    name: 'Two-wheeler',
+    mode: 'two-wheeler',
+    icon: Bike,
+    factor: EMISSION_FACTORS['two-wheeler']
+  },
+  {
+    name: 'Auto-rickshaw',
+    mode: 'auto-rickshaw',
+    icon: Car,
+    factor: EMISSION_FACTORS['auto-rickshaw']
+  },
+  {
+    name: 'EV car',
+    mode: 'ev-car',
+    icon: Car,
+    factor: EMISSION_FACTORS['ev-car']
+  },
+  {
+    name: 'EV scooter',
+    mode: 'ev-scooter',
+    icon: Bike,
+    factor: EMISSION_FACTORS['ev-scooter']
+  },
+  { name: 'Bicycle', mode: 'bike', icon: Bike, factor: EMISSION_FACTORS.bike },
+  {
+    name: 'Walking',
+    mode: 'walking',
+    icon: Footprints,
+    factor: EMISSION_FACTORS.walking
+  }
 ];
 
 function RoutePlanner() {
@@ -253,7 +279,7 @@ function RoutePlanner() {
         },
         transportMode: mode.mode,
         distance: Number(mode.distance),
-        duration: routeInfo?.duration || 0,
+        duration: mode.duration ?? routeInfo?.duration ?? 0,
         carbonEmission: Number(mode.emission),
         carbonSaved: Math.max(0, Number(mode.carbonSaved)),
         preference: travelPreference
@@ -265,32 +291,35 @@ function RoutePlanner() {
   }
 
   function applySavedPlace(place, type) {
+    if (place?.lat == null || place?.lon == null) return;
     selectLocation({ name: place.name, lat: place.lat, lon: place.lon }, type);
   }
 
   return (
-    <div className="min-h-screen bg-[#F7FAF7] flex">
+    <div className="min-h-screen bg-[#F4F3F7] flex">
       <Sidebar />
       <main className="flex-1 min-w-0 p-5 pt-20 pb-24 md:p-10 md:pt-10 md:pb-10">
         <div className="max-w-7xl mx-auto">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-green-600 mb-2">Journey</p>
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-green-950">EcoRoute Planner</h1>
+          <p className="text-xs font-semibold text-[#644DFF] mb-1.5">Journey</p>
+          <h1 className="text-3xl md:text-4xl font-bold tracking-[-0.02em] text-[#111018]">
+            EcoRoute <span className="text-[#644DFF]">Planner</span>
+          </h1>
 
-          <p className="text-gray-500 mt-2 mb-6">
+          <p className="text-[#6E6B7B] text-sm mt-2 mb-6">
             Plan smarter journeys and reduce your carbon footprint.
           </p>
 
         {/* Location Search */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm mb-6">
-          <h2 className="text-xl font-semibold text-green-800 mb-5">
+        <div className="bg-[#FFFFFF] p-6 rounded-2xl border border-[#E4E1F2] shadow-sm mb-6">
+          <h2 className="text-lg font-semibold text-[#111018] mb-5">
             Plan Your Journey
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* Origin */}
             <div>
-              <label className="block text-sm font-medium mb-2">
-                <MapPin className="inline mr-2 text-green-600" size={18} />
+              <label className="block text-sm font-medium text-[#111018] mb-2">
+                <MapPin className="inline mr-2 text-[#644DFF]" size={16} />
                 Starting Location
               </label>
 
@@ -304,29 +333,29 @@ function RoutePlanner() {
                     setOriginResults([]);
                   }}
                   placeholder="Enter starting location (e.g. Swargate, Pune)..."
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full bg-[#ECEAF3] text-[#111018] placeholder-[#9A96A6] rounded-[10px] px-4 py-3 outline-none focus:ring-2 focus:ring-[#644DFF]"
                 />
 
                 <button
                   onClick={() => searchLocation(originQuery, 'origin')}
                   disabled={loading !== ''}
-                  className="bg-green-700 text-white px-4 rounded-lg hover:bg-green-800 disabled:opacity-50"
+                  className="bg-[#644DFF] text-white px-4 rounded-[10px] hover:bg-[#533CE6] disabled:opacity-50 transition cursor-pointer"
                 >
-                  <Search size={20} />
+                  <Search size={19} />
                 </button>
               </div>
 
               {loading === 'origin' && (
-                <p className="text-sm text-gray-500 mt-2">Searching...</p>
+                <p className="text-sm text-[#6E6B7B] mt-2">Searching...</p>
               )}
 
               {originResults.length > 0 && (
-                <div className="border rounded-lg mt-2 divide-y">
+                <div className="border border-[#E4E1F2] bg-white rounded-[10px] mt-2 divide-y divide-[#E4E1F2]">
                   {originResults.map((place, index) => (
                     <button
                       key={`${place.lat}-${place.lon}-${index}`}
                       onClick={() => selectLocation(place, 'origin')}
-                      className="w-full text-left p-3 text-sm hover:bg-green-50"
+                      className="w-full text-left p-3 text-sm text-[#111018] hover:bg-[#ECEAF3] transition"
                     >
                       {place.name}
                     </button>
@@ -334,24 +363,32 @@ function RoutePlanner() {
                 </div>
               )}
               {savedPlaces.length > 0 && (
-                <div className="flex gap-2 mt-2 flex-wrap">
-                  {savedPlaces.map((place) => (
-                    <button
-                      key={place.label}
-                      onClick={() => applySavedPlace(place, 'origin')}
-                      className="text-xs bg-green-50 text-green-800 px-3 py-2 rounded-full"
-                    >
-                      {place.label}: {place.name}
-                    </button>
-                  ))}
+                <div className="flex gap-2 mt-2.5 flex-wrap">
+                  {savedPlaces.map((place) => {
+                    const isActive = origin?.name === place.name;
+                    return (
+                      <button
+                        key={place.label}
+                        type="button"
+                        onClick={() => applySavedPlace(place, 'origin')}
+                        className={`text-xs px-3 py-1.5 rounded-[8px] font-medium transition cursor-pointer ${
+                          isActive
+                            ? 'bg-[#644DFF] text-white'
+                            : 'bg-[#ECEAF3] text-[#111018] hover:bg-[#E5E0FF] hover:text-[#5D45F8]'
+                        }`}
+                      >
+                        {place.label}: {place.name}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
 
             {/* Destination */}
             <div>
-              <label className="block text-sm font-medium mb-2">
-                <Navigation className="inline mr-2 text-red-500" size={18} />
+              <label className="block text-sm font-medium text-[#111018] mb-2">
+                <Navigation className="inline mr-2 text-[#FF5D47]" size={16} />
                 Destination
               </label>
 
@@ -365,7 +402,7 @@ function RoutePlanner() {
                     setDestinationResults([]);
                   }}
                   placeholder="Enter destination (e.g. Hinjewadi, Pune)..."
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full bg-[#ECEAF3] text-[#111018] placeholder-[#9A96A6] rounded-[10px] px-4 py-3 outline-none focus:ring-2 focus:ring-[#644DFF]"
                 />
 
                 <button
@@ -373,23 +410,23 @@ function RoutePlanner() {
                     searchLocation(destinationQuery, 'destination')
                   }
                   disabled={loading !== ''}
-                  className="bg-green-700 text-white px-4 rounded-lg hover:bg-green-800 disabled:opacity-50"
+                  className="bg-[#644DFF] text-white px-4 rounded-[10px] hover:bg-[#533CE6] disabled:opacity-50 transition cursor-pointer"
                 >
-                  <Search size={20} />
+                  <Search size={19} />
                 </button>
               </div>
 
               {loading === 'destination' && (
-                <p className="text-sm text-gray-500 mt-2">Searching...</p>
+                <p className="text-sm text-[#6E6B7B] mt-2">Searching...</p>
               )}
 
               {destinationResults.length > 0 && (
-                <div className="border rounded-lg mt-2 divide-y">
+                <div className="border border-[#E4E1F2] bg-white rounded-[10px] mt-2 divide-y divide-[#E4E1F2]">
                   {destinationResults.map((place, index) => (
                     <button
                       key={`${place.lat}-${place.lon}-${index}`}
                       onClick={() => selectLocation(place, 'destination')}
-                      className="w-full text-left p-3 text-sm hover:bg-green-50"
+                      className="w-full text-left p-3 text-sm text-[#111018] hover:bg-[#ECEAF3] transition"
                     >
                       {place.name}
                     </button>
@@ -397,25 +434,37 @@ function RoutePlanner() {
                 </div>
               )}
               {savedPlaces.length > 0 && (
-                <div className="flex gap-2 mt-2 flex-wrap">
-                  {savedPlaces.map((place) => (
-                    <button
-                      key={place.label}
-                      onClick={() => applySavedPlace(place, 'destination')}
-                      className="text-xs bg-green-50 text-green-800 px-3 py-2 rounded-full"
-                    >
-                      {place.label}: {place.name}
-                    </button>
-                  ))}
+                <div className="flex gap-2 mt-2.5 flex-wrap">
+                  {savedPlaces.map((place) => {
+                    const isActive = destination?.name === place.name;
+                    return (
+                      <button
+                        key={place.label}
+                        type="button"
+                        onClick={() => applySavedPlace(place, 'destination')}
+                        className={`text-xs px-3 py-1.5 rounded-[8px] font-medium transition cursor-pointer ${
+                          isActive
+                            ? 'bg-[#644DFF] text-white'
+                            : 'bg-[#ECEAF3] text-[#111018] hover:bg-[#E5E0FF] hover:text-[#5D45F8]'
+                        }`}
+                      >
+                        {place.label}: {place.name}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
           </div>
         </div>
 
-          {error && <p className="text-red-600 text-sm mt-4">{error}</p>}
+          {error && (
+            <p className="bg-[#FCE4E1] text-[#D94A38] text-sm font-medium p-3 rounded-[10px] mt-4">
+              {error}
+            </p>
+          )}
 
-          <p className="text-xs text-gray-400 mt-4">
+          <p className="text-xs text-[#9A96A6] mt-3 mb-4">
             Location search, maps, and routing powered by Mappls (MapmyIndia).
           </p>
 
@@ -428,18 +477,18 @@ function RoutePlanner() {
         />
 
         {/* Travel Mode Selector */}
-        <div className="bg-white rounded-2xl shadow-sm p-5 mt-6">
-          <h2 className="text-lg font-semibold text-green-800 mb-4">
+        <div className="bg-[#FFFFFF] rounded-2xl border border-[#E4E1F2] shadow-sm p-6 mt-6">
+          <h2 className="text-lg font-semibold text-[#111018] mb-4">
             Select Travel Mode
           </h2>
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-2">
+            <label className="block text-sm font-medium text-[#111018] mb-2">
               Baseline vehicle
             </label>
             <select
               value={baselineVehicle}
               onChange={(e) => setBaselineVehicle(e.target.value)}
-              className="border rounded-lg px-3 py-2"
+              className="bg-[#ECEAF3] text-[#111018] rounded-[10px] px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-[#644DFF]"
             >
               <option value="petrol-car">Petrol Car — 0.17 kg/km</option>
               <option value="diesel-car">Diesel Car — 0.16 kg/km</option>
@@ -460,32 +509,36 @@ function RoutePlanner() {
               <button
                 key={mode.id}
                 onClick={() => setSelectedMode(mode.id)}
-                className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition ${
+                className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition cursor-pointer ${
                   selectedMode === mode.id
-                    ? 'bg-green-50 border-green-600 text-green-800'
-                    : 'border-gray-200 text-gray-600 hover:border-green-400'
+                    ? 'bg-[#E5E0FF] border-[#644DFF] text-[#5D45F8]'
+                    : 'bg-[#FFFFFF] border-[#E4E1F2] text-[#6E6B7B] hover:border-[#644DFF]/50 hover:text-[#111018]'
                 }`}
               >
-                <mode.icon size={26} />
-                <span className="font-medium">{mode.label}</span>
+                <mode.icon size={24} />
+                <span className="font-semibold text-sm">{mode.label}</span>
               </button>
             ))}
           </div>
         </div>
 
         {routeLoading && (
-          <p className="mt-4 text-green-700">Calculating your route...</p>
+          <p className="mt-4 text-sm font-medium text-[#644DFF]">Calculating your route...</p>
         )}
 
-        {routeError && <p className="mt-4 text-red-600">{routeError}</p>}
+        {routeError && (
+          <p className="mt-4 bg-[#FCE4E1] text-[#D94A38] text-sm font-medium p-3 rounded-[10px]">
+            {routeError}
+          </p>
+        )}
 
         {routeInfo && (
-          <div className="bg-white rounded-2xl shadow-sm p-6 mt-6">
-            <h2 className="text-2xl font-bold text-green-800 mb-2">
+          <div className="bg-[#FFFFFF] rounded-2xl border border-[#E4E1F2] shadow-sm p-6 mt-6">
+            <h2 className="text-2xl font-bold tracking-[-0.02em] text-[#111018] mb-1">
               Carbon Emission Comparison
             </h2>
 
-            <p className="text-gray-500 text-sm mb-6">
+            <p className="text-[#6E6B7B] text-sm mb-6">
               Compare the estimated carbon footprint of different transport
               modes.
             </p>
@@ -494,67 +547,78 @@ function RoutePlanner() {
               {emissionResults.map((mode) => (
                 <div
                   key={mode.name}
-                  className={`relative border rounded-xl p-5 transition ${
+                  className={`relative border rounded-2xl p-5 transition ${
                     mode.mode === recommendedMode
-                      ? 'border-green-500 bg-green-50 shadow-md'
-                      : 'border-gray-200 hover:border-green-400'
+                      ? 'border-2 border-[#644DFF] bg-[#F4F3F7]'
+                      : 'border-[#E4E1F2] bg-[#FFFFFF] hover:border-[#644DFF]/50'
                   }`}
                 >
                   {mode.mode === recommendedMode && (
-                    <span className="inline-flex items-center gap-1 bg-green-700 text-white text-xs font-semibold px-3 py-1 rounded-full mb-3">
+                    <span className="inline-flex items-center gap-1 bg-[#D9F7F4] text-[#0E9F96] text-xs font-semibold px-3 py-1 rounded-[8px] mb-3">
                       <span>✓</span>
                       Recommended
                     </span>
                   )}
 
-                  <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center mb-3">
+                  <div className="w-11 h-11 rounded-[10px] bg-[#E5E0FF] flex items-center justify-center mb-3">
                     <mode.icon
-                      size={26}
-                      className="text-green-700"
+                      size={22}
+                      className="text-[#644DFF]"
                       strokeWidth={1.8}
                     />
                   </div>
 
-                  <h3 className="font-semibold text-lg text-gray-800">
+                  <h3 className="font-semibold text-lg text-[#111018]">
                     {mode.name}
                   </h3>
 
-                  <p className="text-sm text-gray-600 mt-2">
-                    Distance: {mode.distance} km
+                  <p className="text-sm text-[#6E6B7B] mt-2">
+                    Distance: <span className="text-[#111018] font-medium">{mode.distance} km</span>
                     {mode.approximateDistance && (
-                      <span className="text-xs text-orange-600 block">
+                      <span className="text-xs text-[#5D45F8] block">
                         Approximate route distance
                       </span>
                     )}
                   </p>
 
-                  <p className="text-2xl font-bold text-green-700 mt-1">
+                  {mode.duration != null && (
+                    <p className="text-sm text-[#6E6B7B] mt-1">
+                      Travel time: <span className="text-[#111018] font-medium">{mode.duration} min</span>
+                      {mode.approximateDuration && (
+                        <span className="text-xs text-[#5D45F8] block">
+                          Approximate travel time
+                        </span>
+                      )}
+                    </p>
+                  )}
+
+                  <p className="text-2xl font-bold tracking-[-0.02em] text-[#111018] mt-2">
                     {mode.emission} kg
                   </p>
 
-                  <p className="text-xs text-gray-400 mt-2">
+                  <p className="text-xs text-[#9A96A6] mt-0.5">
                     CO₂e per journey
                   </p>
 
                   {mode.name !== 'Car' && (
-                    <p className="text-sm text-green-700 mt-3 font-medium">
+                    <p className="text-xs font-semibold text-[#0E9F96] bg-[#D9F7F4] inline-block px-2.5 py-1 rounded-[6px] mt-3">
                       {Number(mode.carbonSaved) > 0
                         ? `${mode.carbonSaved} kg less than baseline`
                         : 'Same as baseline'}
                     </p>
                   )}
-                  <p className="text-sm text-gray-700 mt-2">
-                    Estimated cost: ₹{mode.cost}
+                  <p className="text-sm text-[#6E6B7B] mt-3">
+                    Estimated cost: <span className="text-[#111018] font-medium">₹{mode.cost}</span>
                   </p>
                   {Number(mode.costSaved) > 0 && (
-                    <p className="text-sm text-green-700">
+                    <p className="text-xs font-semibold text-[#0E9F96] mt-1">
                       ₹{mode.costSaved} saved
                     </p>
                   )}
                   <button
                     onClick={() => saveJourney(mode)}
                     disabled={savedModes[mode.mode]}
-                    className="mt-4 w-full rounded-lg bg-green-700 text-white py-2 disabled:bg-green-200 disabled:text-green-800"
+                    className="mt-4 w-full rounded-[10px] bg-[#644DFF] text-white font-semibold py-2.5 hover:bg-[#533CE6] disabled:bg-[#ECEAF3] disabled:text-[#6E6B7B] transition cursor-pointer"
                   >
                     {savedModes[mode.mode] ? 'Saved' : 'Save Journey'}
                   </button>
@@ -562,11 +626,12 @@ function RoutePlanner() {
               ))}
             </div>
 
-            <p className="text-xs text-gray-400 mt-5">
+            <p className="text-xs text-[#9A96A6] mt-5">
               Emission factors are illustrative for prototype testing. Car,
-              bicycle and walking use their respective Mappls route distances.
-              Bus and train use approximate car-route distances. Actual
-              emissions may vary.
+              bicycle and walking use their respective Mappls route distances
+              and durations. Bus, train, and other road modes use approximate
+              car-route distances and estimated travel times. Actual emissions
+              may vary.
             </p>
           </div>
         )}

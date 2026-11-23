@@ -89,8 +89,8 @@ function MapView({ accessToken, origin, destination, routeCoordinates }) {
       polylineRef.current = mapplsClassObject.Polyline({
         map,
         path: routeCoordinates,
-        strokeColor: '#15803D',
-        strokeOpacity: 0.85,
+        strokeColor: '#644DFF',
+        strokeOpacity: 0.9,
         strokeWeight: 6
       });
     }
@@ -124,11 +124,11 @@ function MapView({ accessToken, origin, destination, routeCoordinates }) {
   }, [isMapLoaded, origin, destination, routeCoordinates]);
 
   return (
-    <div className="w-full h-125 rounded-2xl overflow-hidden shadow-lg relative bg-slate-200">
+    <div className="w-full h-125 rounded-2xl overflow-hidden border border-[#E4E1F2] shadow-sm relative bg-[#ECEAF3]">
       <div id="mappls-map" className="w-full h-full" />
       {!accessToken && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/85 p-6 text-center">
-          <p className="text-sm text-gray-600">
+        <div className="absolute inset-0 flex items-center justify-center bg-[#FFFFFF]/90 p-6 text-center">
+          <p className="text-sm text-[#6E6B7B]">
             Waiting for Mappls access token from backend (<code>/api/mappls/token</code>)...
           </p>
         </div>
