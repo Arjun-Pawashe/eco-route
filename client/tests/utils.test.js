@@ -16,7 +16,6 @@ test('decodePolyline decodes encoded polyline5 coordinates', () => {
 test('calculateEmissionResults & rankEmissionResults compute and rank modes', () => {
   const modes = [
     { name: 'Car', mode: 'car', factor: 0.17 },
-    { name: 'Metro', mode: 'metro', factor: 0.035 },
     { name: 'Bicycle', mode: 'bike', factor: 0 },
     { name: 'Auto-rickshaw', mode: 'auto-rickshaw', factor: 0.09 }
   ];
@@ -32,11 +31,7 @@ test('calculateEmissionResults & rankEmissionResults compute and rank modes', ()
     baselineVehicle: 'petrol-car'
   });
 
-  assert.equal(results.length, 4);
-  const metro = results.find((r) => r.mode === 'metro');
-  assert.equal(metro.emission, '0.35');
-  assert.equal(metro.carbonSaved, '1.35');
-  assert.equal(metro.approximateDistance, true);
+  assert.equal(results.length, 3);
 
   const auto = results.find((r) => r.mode === 'auto-rickshaw');
   assert.equal(auto.cost, '190');

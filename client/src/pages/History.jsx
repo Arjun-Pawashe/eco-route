@@ -39,10 +39,11 @@ export default function History() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className="min-h-screen bg-[#F7FAF7] flex">
       <Sidebar />
-      <main className="flex-1 p-6 md:p-10">
-        <h1 className="text-3xl font-bold text-gray-800 mb-6">
+      <main className="flex-1 min-w-0 p-5 pt-20 pb-24 md:p-10 md:pt-10 md:pb-10">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-green-600 mb-2">Trips</p>
+        <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-green-950 mb-6">
           Journey History
         </h1>
         <div className="flex gap-2 flex-wrap mb-6">
@@ -50,8 +51,8 @@ export default function History() {
             <button
               key={mode}
               onClick={() => setFilter(mode)}
-              className={`px-4 py-2 rounded-full text-sm capitalize ${
-                filter === mode ? 'bg-green-700 text-white' : 'bg-white border'
+              className={`px-4 py-2 rounded-full text-sm capitalize transition ${
+              filter === mode ? 'bg-green-800 text-white shadow-sm' : 'bg-white border border-green-100 text-gray-500 hover:border-green-300'
               }`}
             >
               {mode}

@@ -73,29 +73,32 @@ function Dashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className="min-h-screen bg-[#F7FAF7] flex">
       <Sidebar />
 
       {/* Main Content */}
-      <main className="flex-1 p-6 md:p-10">
-        <div className="flex justify-between items-center mb-8">
+      <main className="flex-1 min-w-0 p-5 pt-20 pb-24 md:p-10 md:pt-10 md:pb-10">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-8">
           <div>
-            <h2 className="text-3xl font-bold text-gray-800">Dashboard</h2>
-            <p className="text-gray-500 mt-2">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-green-600 mb-2">Overview</p>
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-green-950">Dashboard</h2>
+            <p className="text-gray-500 mt-2 max-w-xl">
               Track your journeys and environmental impact.
             </p>
           </div>
 
           <button
             onClick={() => navigate('/route-planner')}
-            className="bg-green-700 text-white px-5 py-3 rounded-lg hover:bg-green-800"
+            className="bg-green-800 text-white px-5 py-3.5 rounded-2xl hover:bg-green-900 shadow-sm transition self-start sm:self-auto"
           >
             + Plan a Journey
           </button>
         </div>
 
         {/* Welcome Card */}
-        <div className="bg-green-800 text-white rounded-2xl p-7 mb-8">
+        <div className="relative overflow-hidden bg-green-800 text-white rounded-[2rem] p-7 md:p-9 mb-8">
+          <div className="absolute -right-12 -top-16 w-52 h-52 rounded-full border-[34px] border-white/10" />
+          <div className="relative">
           <div className="flex items-center gap-3 mb-3">
             <Leaf size={28} />
             <span className="font-semibold">EcoRoute Impact</span>
@@ -106,6 +109,7 @@ function Dashboard() {
           <p className="text-green-100 mt-2">
             Choose smarter routes and contribute to a sustainable future.
           </p>
+          </div>
         </div>
 
         {/* Statistics */}

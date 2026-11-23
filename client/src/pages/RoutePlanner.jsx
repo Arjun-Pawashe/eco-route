@@ -4,7 +4,6 @@ import {
   Search,
   Navigation,
   Bus,
-  TrainFront,
   Train,
   Car,
   Bike,
@@ -18,19 +17,18 @@ import {
   rankEmissionResults
 } from '../utils/carbonCalculator';
 import MapView from '../components/MapView';
+import Sidebar from '../components/Sidebar';
 
 const TRANSPORT_MODES = [
   { name: 'Bus', mode: 'bus', icon: Bus, factor: 0.08 },
   { name: 'Train', mode: 'train', icon: Train, factor: 0.04 },
-  { name: 'Metro', mode: 'metro', icon: TrainFront, factor: 0.035 },
   { name: 'Car', mode: 'car', icon: Car, factor: 0.17 },
   { name: 'Two-wheeler', mode: 'two-wheeler', icon: Bike, factor: 0.05 },
   { name: 'Auto-rickshaw', mode: 'auto-rickshaw', icon: Car, factor: 0.09 },
   { name: 'EV car', mode: 'ev-car', icon: Car, factor: 0.05 },
   { name: 'EV scooter', mode: 'ev-scooter', icon: Bike, factor: 0.02 },
   { name: 'Bicycle', mode: 'bike', icon: Bike, factor: 0 },
-  { name: 'Walking', mode: 'walking', icon: Footprints, factor: 0 },
-  { name: 'Multimodal', mode: 'multimodal', icon: TrainFront, factor: 0.04 }
+  { name: 'Walking', mode: 'walking', icon: Footprints, factor: 0 }
 ];
 
 function RoutePlanner() {
@@ -64,8 +62,7 @@ function RoutePlanner() {
   const [routeOptions, setRouteOptions] = useState({
     car: null,
     bike: null,
-    foot: null,
-    metro: null
+    foot: null
   });
 
   const travelPreference = userProfile?.travelPreference || 'balanced';
@@ -94,8 +91,7 @@ function RoutePlanner() {
       setRouteOptions({
         car: null,
         bike: null,
-        foot: null,
-        metro: null
+        foot: null
       });
       setRouteCoordinates([]);
       setRouteInfo(null);
@@ -112,8 +108,7 @@ function RoutePlanner() {
       setRouteOptions({
         car: null,
         bike: null,
-        foot: null,
-        metro: null
+        foot: null
       });
 
       try {
@@ -142,17 +137,8 @@ function RoutePlanner() {
                 ...rawRoutes.foot,
                 coordinates: decodePolyline(rawRoutes.foot.geometry)
               }
-            : null,
-          metro: null
+            : null
         };
-
-        if (parsed.car) {
-          parsed.metro = {
-            ...parsed.car,
-            coordinates: parsed.car.coordinates,
-            approximate: true
-          };
-        }
 
         setRouteOptions(parsed);
 
@@ -256,19 +242,6 @@ function RoutePlanner() {
   async function saveJourney(mode) {
     if (!origin || !destination) return;
     try {
-      const legs =
-        mode.mode === 'multimodal'
-          ? [
-              { mode: 'walking', distance: 0.5, duration: 8, carbonEmission: 0 },
-              {
-                mode: 'metro',
-                distance: Number(mode.distance),
-                duration: routeInfo?.duration || 0,
-                carbonEmission: Number(mode.emission)
-              },
-              { mode: 'walking', distance: 0.5, duration: 8, carbonEmission: 0 }
-            ]
-          : [];
       await API.post('/journeys', {
         origin: {
           name: origin.name,
@@ -283,8 +256,7 @@ function RoutePlanner() {
         duration: routeInfo?.duration || 0,
         carbonEmission: Number(mode.emission),
         carbonSaved: Math.max(0, Number(mode.carbonSaved)),
-        preference: travelPreference,
-        legs
+        preference: travelPreference
       });
       setSavedModes((current) => ({ ...current, [mode.mode]: true }));
     } catch (err) {
@@ -297,13 +269,16 @@ function RoutePlanner() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-green-800">EcoRoute Planner</h1>
+    <div className="min-h-screen bg-[#F7FAF7] flex">
+      <Sidebar />
+      <main className="flex-1 min-w-0 p-5 pt-20 pb-24 md:p-10 md:pt-10 md:pb-10">
+        <div className="max-w-7xl mx-auto">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-green-600 mb-2">Journey</p>
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-green-950">EcoRoute Planner</h1>
 
-        <p className="text-gray-500 mt-2 mb-6">
-          Plan smarter journeys and reduce your carbon footprint.
-        </p>
+          <p className="text-gray-500 mt-2 mb-6">
+            Plan smarter journeys and reduce your carbon footprint.
+          </p>
 
         {/* Location Search */}
         <div className="bg-white p-6 rounded-2xl shadow-sm mb-6">
@@ -436,13 +411,13 @@ function RoutePlanner() {
               )}
             </div>
           </div>
+        </div>
 
           {error && <p className="text-red-600 text-sm mt-4">{error}</p>}
 
           <p className="text-xs text-gray-400 mt-4">
             Location search, maps, and routing powered by Mappls (MapmyIndia).
           </p>
-        </div>
 
         {/* Map */}
         <MapView
@@ -480,8 +455,7 @@ function RoutePlanner() {
             {[
               { id: 'car', label: 'Car', icon: Car },
               { id: 'bike', label: 'Bicycle', icon: Bike },
-              { id: 'foot', label: 'Walking', icon: Footprints },
-              { id: 'metro', label: 'Metro', icon: TrainFront }
+              { id: 'foot', label: 'Walking', icon: Footprints }
             ].map((mode) => (
               <button
                 key={mode.id}
@@ -591,12 +565,13 @@ function RoutePlanner() {
             <p className="text-xs text-gray-400 mt-5">
               Emission factors are illustrative for prototype testing. Car,
               bicycle and walking use their respective Mappls route distances.
-              Bus, train and metro currently use approximate car-route
-              distances. Actual emissions may vary.
+              Bus and train use approximate car-route distances. Actual
+              emissions may vary.
             </p>
           </div>
         )}
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

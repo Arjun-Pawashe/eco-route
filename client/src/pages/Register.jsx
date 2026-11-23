@@ -67,8 +67,8 @@ function Register() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-      <div className="bg-white w-full max-w-md p-8 rounded-2xl shadow-lg">
+    <div className="min-h-screen flex items-center justify-center bg-[#F7FAF7] px-4 py-10">
+      <div className="bg-white w-full max-w-md p-8 sm:p-10 rounded-[2rem] border border-green-100 shadow-[0_24px_70px_rgba(22,101,52,0.10)]">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-3">
             <div className="bg-green-100 p-3 rounded-xl">

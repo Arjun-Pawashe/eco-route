@@ -9,15 +9,13 @@ export const BASELINE_FACTORS = {
 export const COST_FACTORS = {
   bus: 0.05,
   train: 0.04,
-  metro: 0.035,
   car: 10 / 15,
   'two-wheeler': 10 / 45,
   'auto-rickshaw': 12,
   'ev-car': 1.8,
   'ev-scooter': 0.3,
   bike: 0,
-  walking: 0,
-  multimodal: 0.06
+  walking: 0
 };
 
 // Decodes Mappls/Google encoded polyline5 string into [{ lat, lng }, ...]

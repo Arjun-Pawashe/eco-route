@@ -6,7 +6,23 @@
 
 body {
     margin: 0;
-    font-family: Arial, sans-serif;
-    background: #F8FAFC;
+    font-family: Inter, "Segoe UI", Arial, sans-serif;
+    background: #F7FAF7;
+    color: #14532D;
+}
+
+button,
+input,
+select {
+    font: inherit;
+}
+
+button,
+a {
+    -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+    background: #DCFCE7;
     color: #14532D;
 }

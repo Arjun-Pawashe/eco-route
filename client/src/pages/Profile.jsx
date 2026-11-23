@@ -36,14 +36,15 @@ export default function Profile() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className="min-h-screen bg-[#F7FAF7] flex">
       <Sidebar />
-      <main className="flex-1 p-6 md:p-10">
-        <h1 className="text-3xl font-bold text-gray-800 mb-6">Preferences</h1>
+      <main className="flex-1 min-w-0 p-5 pt-20 pb-24 md:p-10 md:pt-10 md:pb-10">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-green-600 mb-2">Settings</p>
+        <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-green-950 mb-6">Preferences</h1>
         {!userProfile ? (
           <p className="text-gray-500">Loading profile...</p>
         ) : (
-          <div className="bg-white border rounded-xl p-6 max-w-xl">
+          <div className="bg-white border border-green-100 rounded-[2rem] p-6 sm:p-8 max-w-xl shadow-sm">
             <div className="mb-6">
               <p className="text-sm text-gray-500">Name</p>
               <p className="font-semibold">{userProfile.name}</p>
