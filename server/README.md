@@ -1,17 +1,15 @@
-# EcoRoute server
+# EcoRoute Server (Render)
 
-The API persists user profiles and journeys in Cloud Firestore through the Firebase Admin SDK.
+Express backend for **Mappls (MapmyIndia)** APIs and **MongoDB** persistence, with authentication handled by **Firebase Auth** on the frontend and verified on the backend via Firebase ID tokens (`firebase-admin`).
 
-## Configure Firestore
+## Endpoints
 
-1. Create a Firebase project and create its Firestore database.
-2. Create a service account with permission to read and write Firestore.
-3. Configure the server environment using one of these options:
-   - Set `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY` (Render and other managed hosts). Preserve the private key's newlines as `\n`.
-   - Set `GOOGLE_APPLICATION_CREDENTIALS` to a service-account JSON file path for local development.
-   - Set `FIRESTORE_EMULATOR_HOST` and `GCLOUD_PROJECT` to use the local Firestore emulator.
-4. Set `JWT_SECRET` and the Mappls variables as before, then run `npm install` and `npm start`.
+- `GET /api/health` — Health check
+- `GET /api/mappls/token`, `GET /api/mappls/search`, `POST /api/mappls/routes` — Mappls proxy
+- `GET/POST /api/users/profile`, `PUT /api/users/preferences`, `PUT /api/users/saved-places` — User profile & preferences (Firebase Bearer token required)
+- `GET/POST /api/journeys`, `DELETE /api/journeys/:id` — Journey history (Firebase Bearer token required)
+- `GET /api/dashboard/stats` — Dashboard metrics, charts, and green streak (Firebase Bearer token required)
 
-The Admin SDK accesses Firestore from the server; service-account credentials must never be placed in the React client's environment.
+## Environment Variables
 
-The server stores profiles in `users`, email uniqueness records in `userEmails`, and journeys in `journeys`. Existing MongoDB records are not copied automatically; migrate them separately before removing the old database if they need to be retained.
+Copy `.env.example` to `.env` and set `MONGODB_URI`, Mappls credentials, `CLIENT_URL`, and Firebase Admin service account credentials (`FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`).

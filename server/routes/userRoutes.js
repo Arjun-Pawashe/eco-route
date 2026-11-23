@@ -1,19 +1,15 @@
 const express = require('express');
 const router = express.Router();
+const { requireAuth } = require('../middleware/authMiddleware');
+const {
+    getOrCreateProfile,
+    updatePreferences,
+    updateSavedPlaces
+} = require('../controllers/userController');
 
-const { updatePreferences, updateSavedPlaces } = require('../controllers/userController');
-const protect = require('../middleware/authMiddleware');
-const validateRequest = require('../middleware/validationMiddleware');
-
-const { preferenceValidator } = require('../validators/userValidator');
-
-router.put(
-    '/preferences',
-    protect,
-    preferenceValidator,
-    validateRequest,
-    updatePreferences
-);
-router.put('/places', protect, updateSavedPlaces);
+router.get('/profile', requireAuth, getOrCreateProfile);
+router.post('/profile', requireAuth, getOrCreateProfile);
+router.put('/preferences', requireAuth, updatePreferences);
+router.put('/saved-places', requireAuth, updateSavedPlaces);
 
 module.exports = router;

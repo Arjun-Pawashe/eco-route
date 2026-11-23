@@ -1,18 +1,14 @@
 const express = require('express');
 const router = express.Router();
-
+const { requireAuth } = require('../middleware/authMiddleware');
 const {
     saveJourney,
     getMyJourneys,
     deleteJourney
 } = require('../controllers/journeyController');
 
-const protect = require('../middleware/authMiddleware');
-const validateRequest = require('../middleware/validationMiddleware');
-const { saveJourneyValidator, journeyIdValidator } = require('../validators/journeyValidator');
-
-router.post('/', protect, saveJourneyValidator, validateRequest, saveJourney);
-router.get('/', protect, getMyJourneys);
-router.delete('/:id', protect, journeyIdValidator, validateRequest, deleteJourney);
+router.post('/', requireAuth, saveJourney);
+router.get('/', requireAuth, getMyJourneys);
+router.delete('/:id', requireAuth, deleteJourney);
 
 module.exports = router;

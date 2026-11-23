@@ -11,49 +11,31 @@ import {
   Footprints
 } from 'lucide-react';
 import API from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import {
+  calculateEmissionResults,
+  decodePolyline,
+  rankEmissionResults
+} from '../utils/carbonCalculator';
 import MapView from '../components/MapView';
 
-// Decodes Mappls/Google encoded polyline5 string into [{ lat, lng }, ...]
-function decodePolyline(encoded) {
-  if (!encoded) return [];
-  const points = [];
-  let index = 0;
-  let lat = 0;
-  let lng = 0;
-
-  while (index < encoded.length) {
-    let shift = 0;
-    let result = 0;
-    let byte;
-
-    do {
-      byte = encoded.charCodeAt(index++) - 63;
-      result |= (byte & 0x1f) << shift;
-      shift += 5;
-    } while (byte >= 0x20);
-
-    const dlat = result & 1 ? ~(result >> 1) : result >> 1;
-    lat += dlat;
-
-    shift = 0;
-    result = 0;
-
-    do {
-      byte = encoded.charCodeAt(index++) - 63;
-      result |= (byte & 0x1f) << shift;
-      shift += 5;
-    } while (byte >= 0x20);
-
-    const dlng = result & 1 ? ~(result >> 1) : result >> 1;
-    lng += dlng;
-
-    points.push({ lat: lat / 1e5, lng: lng / 1e5 });
-  }
-
-  return points;
-}
+const TRANSPORT_MODES = [
+  { name: 'Bus', mode: 'bus', icon: Bus, factor: 0.08 },
+  { name: 'Train', mode: 'train', icon: Train, factor: 0.04 },
+  { name: 'Metro', mode: 'metro', icon: TrainFront, factor: 0.035 },
+  { name: 'Car', mode: 'car', icon: Car, factor: 0.17 },
+  { name: 'Two-wheeler', mode: 'two-wheeler', icon: Bike, factor: 0.05 },
+  { name: 'Auto-rickshaw', mode: 'auto-rickshaw', icon: Car, factor: 0.09 },
+  { name: 'EV car', mode: 'ev-car', icon: Car, factor: 0.05 },
+  { name: 'EV scooter', mode: 'ev-scooter', icon: Bike, factor: 0.02 },
+  { name: 'Bicycle', mode: 'bike', icon: Bike, factor: 0 },
+  { name: 'Walking', mode: 'walking', icon: Footprints, factor: 0 },
+  { name: 'Multimodal', mode: 'multimodal', icon: TrainFront, factor: 0.04 }
+];
 
 function RoutePlanner() {
+  const { userProfile } = useAuth();
+
   const [mapToken, setMapToken] = useState(
     import.meta.env.VITE_MAPPLS_ACCESS_TOKEN || ''
   );
@@ -77,8 +59,6 @@ function RoutePlanner() {
 
   const [selectedMode, setSelectedMode] = useState('car');
   const [baselineVehicle, setBaselineVehicle] = useState('petrol-car');
-  const [travelPreference, setTravelPreference] = useState('balanced');
-  const [savedPlaces, setSavedPlaces] = useState([]);
   const [savedModes, setSavedModes] = useState({});
 
   const [routeOptions, setRouteOptions] = useState({
@@ -88,30 +68,10 @@ function RoutePlanner() {
     metro: null
   });
 
-  const transportModes = [
-    { name: 'Bus', mode: 'bus', icon: Bus, factor: 0.08 },
-    { name: 'Train', mode: 'train', icon: Train, factor: 0.04 },
-    { name: 'Metro', mode: 'metro', icon: TrainFront, factor: 0.035 },
-    { name: 'Car', mode: 'car', icon: Car, factor: 0.17 },
-    { name: 'Two-wheeler', mode: 'two-wheeler', icon: Bike, factor: 0.05 },
-    { name: 'Auto-rickshaw', mode: 'auto-rickshaw', icon: Car, factor: 0.09 },
-    { name: 'EV car', mode: 'ev-car', icon: Car, factor: 0.05 },
-    { name: 'EV scooter', mode: 'ev-scooter', icon: Bike, factor: 0.02 },
-    { name: 'Bicycle', mode: 'bike', icon: Bike, factor: 0 },
-    { name: 'Walking', mode: 'walking', icon: Footprints, factor: 0 },
-    { name: 'Multimodal', mode: 'multimodal', icon: TrainFront, factor: 0.04 }
-  ];
+  const travelPreference = userProfile?.travelPreference || 'balanced';
+  const savedPlaces = userProfile?.savedPlaces || [];
 
-  useEffect(() => {
-    API.get('/auth/profile')
-      .then(res => {
-        setTravelPreference(res.data.user.travelPreference || 'balanced');
-        setSavedPlaces(res.data.user.savedPlaces || []);
-      })
-      .catch(() => {});
-  }, []);
-
-  // Fetch Mappls SDK token from backend if not provided via env
+  // Fetch Mappls SDK token from Render backend if not provided via env
   useEffect(() => {
     if (mapToken) return;
 
@@ -236,78 +196,13 @@ function RoutePlanner() {
     }
   }, [routeOptions, selectedMode]);
 
-  const emissionResults = routeOptions.car
-    ? transportModes
-        .map((mode) => {
-          let distance;
-          let approximateDistance = false;
-
-          if (mode.name === 'Car') {
-            distance = routeOptions.car.distance;
-          } else if (mode.name === 'Bicycle') {
-            if (!routeOptions.bike) return null;
-            distance = routeOptions.bike.distance;
-          } else if (mode.name === 'Walking') {
-            if (!routeOptions.foot) return null;
-            distance = routeOptions.foot.distance;
-          } else {
-            // Public transport uses car distance as an approximation
-            distance = routeOptions.car.distance;
-            approximateDistance = true;
-          }
-
-          const emission = distance * mode.factor;
-          const baselineFactors = {
-            'petrol-car': 0.17,
-            'diesel-car': 0.16,
-            'petrol-two-wheeler': 0.05,
-            'ev-car': 0.05,
-            'auto-rickshaw': 0.09
-          };
-          const baselineEmission = routeOptions.car.distance * (baselineFactors[baselineVehicle] ?? 0.17);
-          const costFactors = {
-            bus: 0.05,
-            train: 0.04,
-            metro: 0.035,
-            car: 10 / 15,
-            'two-wheeler': 10 / 45,
-            'auto-rickshaw': 12,
-            'ev-car': 1.8,
-            'ev-scooter': 0.3,
-            bike: 0,
-            walking: 0,
-            multimodal: 0.06
-          };
-          const cost = mode.mode === 'auto-rickshaw'
-            ? 30 + (distance * 16)
-            : distance * (costFactors[mode.mode] ?? 0);
-          const baselineCost = mode.mode === 'car'
-            ? distance * 10 / 15
-            : distance * (baselineFactors[baselineVehicle] === 0.05 ? 10 / 45 : 10 / 15);
-
-          return {
-            ...mode,
-            distance: distance.toFixed(2),
-            approximateDistance,
-            emission: emission.toFixed(2),
-            carbonSaved: (baselineEmission - emission).toFixed(2),
-            cost: cost.toFixed(0),
-            costSaved: Math.max(0, baselineCost - cost).toFixed(0)
-          };
-        })
-        .filter(Boolean)
-    : [];
-
-  const rankedResults = [...emissionResults].sort((a, b) => {
-    if (travelPreference === 'lowest-carbon') {
-      return Number(a.emission) - Number(b.emission);
-    }
-    if (travelPreference === 'fastest') {
-      return a.mode === 'car' ? -1 : 1;
-    }
-    return (Number(a.emission) + Number(a.distance) * 0.01) -
-      (Number(b.emission) + Number(b.distance) * 0.01);
+  const emissionResults = calculateEmissionResults({
+    transportModes: TRANSPORT_MODES,
+    routeOptions,
+    baselineVehicle
   });
+
+  const rankedResults = rankEmissionResults(emissionResults, travelPreference);
   const recommendedMode = rankedResults[0]?.mode;
 
   async function searchLocation(query, type) {
@@ -361,16 +256,28 @@ function RoutePlanner() {
   async function saveJourney(mode) {
     if (!origin || !destination) return;
     try {
-      const legs = mode.mode === 'multimodal'
-        ? [
-            { mode: 'walking', distance: 0.5, duration: 8, carbonEmission: 0 },
-            { mode: 'metro', distance: Number(mode.distance), duration: routeInfo?.duration || 0, carbonEmission: Number(mode.emission) },
-            { mode: 'walking', distance: 0.5, duration: 8, carbonEmission: 0 }
-          ]
-        : [];
+      const legs =
+        mode.mode === 'multimodal'
+          ? [
+              { mode: 'walking', distance: 0.5, duration: 8, carbonEmission: 0 },
+              {
+                mode: 'metro',
+                distance: Number(mode.distance),
+                duration: routeInfo?.duration || 0,
+                carbonEmission: Number(mode.emission)
+              },
+              { mode: 'walking', distance: 0.5, duration: 8, carbonEmission: 0 }
+            ]
+          : [];
       await API.post('/journeys', {
-        origin: { name: origin.name, coordinates: { lat: origin.lat, lng: origin.lon } },
-        destination: { name: destination.name, coordinates: { lat: destination.lat, lng: destination.lon } },
+        origin: {
+          name: origin.name,
+          coordinates: { lat: origin.lat, lng: origin.lon }
+        },
+        destination: {
+          name: destination.name,
+          coordinates: { lat: destination.lat, lng: destination.lon }
+        },
         transportMode: mode.mode,
         distance: Number(mode.distance),
         duration: routeInfo?.duration || 0,
@@ -379,7 +286,7 @@ function RoutePlanner() {
         preference: travelPreference,
         legs
       });
-      setSavedModes(current => ({ ...current, [mode.mode]: true }));
+      setSavedModes((current) => ({ ...current, [mode.mode]: true }));
     } catch (err) {
       setError(err.response?.data?.message || 'Could not save journey');
     }
@@ -392,9 +299,7 @@ function RoutePlanner() {
   return (
     <div className="min-h-screen bg-slate-50 p-6">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-green-800">
-          EcoRoute Planner
-        </h1>
+        <h1 className="text-3xl font-bold text-green-800">EcoRoute Planner</h1>
 
         <p className="text-gray-500 mt-2 mb-6">
           Plan smarter journeys and reduce your carbon footprint.
@@ -455,8 +360,12 @@ function RoutePlanner() {
               )}
               {savedPlaces.length > 0 && (
                 <div className="flex gap-2 mt-2 flex-wrap">
-                  {savedPlaces.map(place => (
-                    <button key={place.label} onClick={() => applySavedPlace(place, 'origin')} className="text-xs bg-green-50 text-green-800 px-3 py-2 rounded-full">
+                  {savedPlaces.map((place) => (
+                    <button
+                      key={place.label}
+                      onClick={() => applySavedPlace(place, 'origin')}
+                      className="text-xs bg-green-50 text-green-800 px-3 py-2 rounded-full"
+                    >
                       {place.label}: {place.name}
                     </button>
                   ))}
@@ -514,8 +423,12 @@ function RoutePlanner() {
               )}
               {savedPlaces.length > 0 && (
                 <div className="flex gap-2 mt-2 flex-wrap">
-                  {savedPlaces.map(place => (
-                    <button key={place.label} onClick={() => applySavedPlace(place, 'destination')} className="text-xs bg-green-50 text-green-800 px-3 py-2 rounded-full">
+                  {savedPlaces.map((place) => (
+                    <button
+                      key={place.label}
+                      onClick={() => applySavedPlace(place, 'destination')}
+                      className="text-xs bg-green-50 text-green-800 px-3 py-2 rounded-full"
+                    >
                       {place.label}: {place.name}
                     </button>
                   ))}
@@ -545,11 +458,19 @@ function RoutePlanner() {
             Select Travel Mode
           </h2>
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-2">Baseline vehicle</label>
-            <select value={baselineVehicle} onChange={e => setBaselineVehicle(e.target.value)} className="border rounded-lg px-3 py-2">
+            <label className="block text-sm font-medium mb-2">
+              Baseline vehicle
+            </label>
+            <select
+              value={baselineVehicle}
+              onChange={(e) => setBaselineVehicle(e.target.value)}
+              className="border rounded-lg px-3 py-2"
+            >
               <option value="petrol-car">Petrol Car — 0.17 kg/km</option>
               <option value="diesel-car">Diesel Car — 0.16 kg/km</option>
-              <option value="petrol-two-wheeler">Petrol Two-Wheeler — 0.05 kg/km</option>
+              <option value="petrol-two-wheeler">
+                Petrol Two-Wheeler — 0.05 kg/km
+              </option>
               <option value="ev-car">EV Car — 0.05 kg/km</option>
               <option value="auto-rickshaw">Auto-Rickshaw — 0.09 kg/km</option>
             </select>
@@ -652,7 +573,9 @@ function RoutePlanner() {
                     Estimated cost: ₹{mode.cost}
                   </p>
                   {Number(mode.costSaved) > 0 && (
-                    <p className="text-sm text-green-700">₹{mode.costSaved} saved</p>
+                    <p className="text-sm text-green-700">
+                      ₹{mode.costSaved} saved
+                    </p>
                   )}
                   <button
                     onClick={() => saveJourney(mode)}
@@ -668,8 +591,8 @@ function RoutePlanner() {
             <p className="text-xs text-gray-400 mt-5">
               Emission factors are illustrative for prototype testing. Car,
               bicycle and walking use their respective Mappls route distances.
-              Bus, train and metro currently use approximate car-route distances.
-              Actual emissions may vary.
+              Bus, train and metro currently use approximate car-route
+              distances. Actual emissions may vary.
             </p>
           </div>
         )}

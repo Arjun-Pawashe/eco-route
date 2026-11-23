@@ -1,42 +1,36 @@
+const { admin } = require('../config/firebaseAdmin');
 
-const jwt = require('jsonwebtoken');
+const requireAuth = async (req, res, next) => {
+    const authHeader = req.headers.authorization || '';
+    if (!authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({
+            success: false,
+            message: 'Authorization token missing'
+        });
+    }
 
-const protect = (req, res, next) => {
+    const token = authHeader.slice(7).trim();
+    if (!token) {
+        return res.status(401).json({
+            success: false,
+            message: 'Authorization token missing'
+        });
+    }
+
     try {
-        let token;
-
-        // Get token from Authorization header
-        if (
-            req.headers.authorization &&
-            req.headers.authorization.startsWith('Bearer ')
-        ) {
-            token = req.headers.authorization.split(' ')[1];
-        }
-
-        if (!token) {
-            return res.status(401).json({
-                success: false,
-                message: 'Not authorized. Please login first.'
-            });
-        }
-
-        // Verify token
-        const decoded = jwt.verify(
-            token,
-            process.env.JWT_SECRET
-        );
-
-        // Attach user ID to request
-        req.user = { id: decoded.id };
-
-        next();
-
+        const decoded = await admin.auth().verifyIdToken(token);
+        req.user = {
+            uid: decoded.uid,
+            email: decoded.email || '',
+            name: decoded.name || ''
+        };
+        return next();
     } catch (error) {
         return res.status(401).json({
             success: false,
-            message: 'Invalid or expired token'
+            message: 'Invalid or expired Firebase token'
         });
     }
 };
 
-module.exports = protect;
+module.exports = { requireAuth };

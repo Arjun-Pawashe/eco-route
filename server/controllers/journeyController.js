@@ -1,6 +1,6 @@
-const { createJourney, getUserJourneys, deleteUserJourney } = require('../services/firestore');
+const Journey = require('../models/Journey');
 
-// POST: Save a journey
+// POST /api/journeys
 const saveJourney = async (req, res) => {
     try {
         const {
@@ -15,17 +15,24 @@ const saveJourney = async (req, res) => {
             legs
         } = req.body;
 
-        const journey = await createJourney({
-            user: req.user.id,
+        if (!origin?.name || !destination?.name || !transportMode) {
+            return res.status(400).json({
+                success: false,
+                message: 'Origin, destination, and transportMode are required'
+            });
+        }
+
+        const journey = await Journey.create({
+            userId: req.user.uid,
             origin,
             destination,
             transportMode,
-            distance,
-            duration,
-            carbonEmission,
-            carbonSaved,
-            preference,
-            legs
+            distance: Number(distance) || 0,
+            duration: Number(duration) || 0,
+            carbonEmission: Number(carbonEmission) || 0,
+            carbonSaved: Number(carbonSaved) || 0,
+            preference: preference || 'balanced',
+            legs: Array.isArray(legs) ? legs : []
         });
 
         res.status(201).json({
@@ -42,10 +49,12 @@ const saveJourney = async (req, res) => {
     }
 };
 
-// GET: Retrieve logged-in user's journeys
+// GET /api/journeys
 const getMyJourneys = async (req, res) => {
     try {
-        const journeys = await getUserJourneys(req.user.id);
+        const journeys = await Journey.find({ userId: req.user.uid })
+            .sort({ createdAt: -1 })
+            .lean();
 
         res.status(200).json({
             success: true,
@@ -60,10 +69,13 @@ const getMyJourneys = async (req, res) => {
     }
 };
 
-// DELETE: Delete a saved journey
+// DELETE /api/journeys/:id
 const deleteJourney = async (req, res) => {
     try {
-        const deleted = await deleteUserJourney(req.params.id, req.user.id);
+        const deleted = await Journey.findOneAndDelete({
+            _id: req.params.id,
+            userId: req.user.uid
+        });
 
         if (!deleted) {
             return res.status(404).json({
