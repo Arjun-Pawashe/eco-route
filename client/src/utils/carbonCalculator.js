@@ -159,6 +159,43 @@ export function calculateEmissionResults({
 }
 
 export function rankEmissionResults(emissionResults, travelPreference = 'balanced') {
+  if (typeof travelPreference === 'number') {
+    const carbonPriority = Math.min(100, Math.max(0, travelPreference)) / 100;
+    const durations = emissionResults
+      .map((result) => result.duration)
+      .filter(Number.isFinite);
+    const emissions = emissionResults
+      .map((result) => Number(result.emission))
+      .filter(Number.isFinite);
+    const minDuration = Math.min(...durations);
+    const maxDuration = Math.max(...durations);
+    const minEmission = Math.min(...emissions);
+    const maxEmission = Math.max(...emissions);
+
+    const durationScore = (result) => {
+      if (!Number.isFinite(result.duration)) return durations.length > 0 ? 1 : 0;
+      if (maxDuration === minDuration) return 0;
+      return (result.duration - minDuration) / (maxDuration - minDuration);
+    };
+    const emissionScore = (result) => {
+      const emission = Number(result.emission);
+      if (maxEmission === minEmission) return 0;
+      return (emission - minEmission) / (maxEmission - minEmission);
+    };
+    const score = (result) =>
+      durationScore(result) * (1 - carbonPriority) +
+      emissionScore(result) * carbonPriority;
+
+    return [...emissionResults].sort((a, b) => {
+      const scoreDifference = score(a) - score(b);
+      if (scoreDifference !== 0) return scoreDifference;
+      return (
+        emissionScore(a) - emissionScore(b) ||
+        durationScore(a) - durationScore(b)
+      );
+    });
+  }
+
   return [...emissionResults].sort((a, b) => {
     if (travelPreference === 'lowest-carbon') {
       return Number(a.emission) - Number(b.emission);

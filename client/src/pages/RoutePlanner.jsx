@@ -83,6 +83,7 @@ function RoutePlanner() {
 
   const [selectedMode, setSelectedMode] = useState('car');
   const [baselineVehicle, setBaselineVehicle] = useState('petrol-car');
+  const [routePriorityOverride, setRoutePriorityOverride] = useState(null);
   const [savedModes, setSavedModes] = useState({});
 
   const [routeOptions, setRouteOptions] = useState({
@@ -93,6 +94,13 @@ function RoutePlanner() {
 
   const travelPreference = userProfile?.travelPreference || 'balanced';
   const savedPlaces = userProfile?.savedPlaces || [];
+  const defaultRoutePriority =
+    travelPreference === 'fastest'
+      ? 0
+      : travelPreference === 'lowest-carbon'
+        ? 100
+        : 50;
+  const routePriority = routePriorityOverride ?? defaultRoutePriority;
 
   // Fetch Mappls SDK token from Render backend if not provided via env
   useEffect(() => {
@@ -214,7 +222,7 @@ function RoutePlanner() {
     baselineVehicle
   });
 
-  const rankedResults = rankEmissionResults(emissionResults, travelPreference);
+  const rankedResults = rankEmissionResults(emissionResults, routePriority);
   const recommendedMode = rankedResults[0]?.mode;
 
   async function searchLocation(query, type) {
@@ -539,12 +547,42 @@ function RoutePlanner() {
             </h2>
 
             <p className="text-[#6E6B7B] text-sm mb-6">
-              Compare the estimated carbon footprint of different transport
-              modes.
+              Compare the available routes by travel time and estimated carbon
+              emissions.
             </p>
 
+            <div className="mb-6 rounded-xl border border-[#E4E1F2] bg-[#F9F8FC] p-4">
+              <div className="flex items-center justify-between gap-4">
+                <label
+                  htmlFor="route-priority"
+                  className="text-sm font-semibold text-[#111018]"
+                >
+                  Route priority
+                </label>
+                <span className="text-xs font-medium text-[#6E6B7B]">
+                  {routePriority}% emissions
+                </span>
+              </div>
+              <input
+                id="route-priority"
+                type="range"
+                min="0"
+                max="100"
+                value={routePriority}
+                onChange={(event) =>
+                  setRoutePriorityOverride(Number(event.target.value))
+                }
+                aria-label="Route priority from fastest time to lowest emissions"
+                className="mt-3 w-full accent-[#644DFF] cursor-pointer"
+              />
+              <div className="flex justify-between text-xs font-medium text-[#6E6B7B]">
+                <span>Fastest time</span>
+                <span>Lowest emissions</span>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {emissionResults.map((mode) => (
+              {rankedResults.map((mode) => (
                 <div
                   key={mode.name}
                   className={`relative border rounded-2xl p-5 transition ${

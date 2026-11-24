@@ -57,6 +57,19 @@ test('calculateEmissionResults & rankEmissionResults compute duration and rank m
   assert.equal(fastest[fastest.length - 1].mode, 'bus');
 });
 
+test('rankEmissionResults balances time and emissions for numeric route priorities', () => {
+  const results = [
+    { mode: 'fast', duration: 10, emission: '0.60' },
+    { mode: 'balanced', duration: 20, emission: '0.30' },
+    { mode: 'green', duration: 40, emission: '0.00' }
+  ];
+
+  assert.equal(rankEmissionResults(results, 0)[0].mode, 'fast');
+  assert.equal(rankEmissionResults(results, 50)[0].mode, 'balanced');
+  assert.equal(rankEmissionResults(results, 100)[0].mode, 'green');
+  assert.deepEqual(results.map((result) => result.mode), ['fast', 'balanced', 'green']);
+});
+
 test('computeCarbonEquivalents calculates approximate trees, phone charges, and petrol avoided', () => {
   const eq = computeCarbonEquivalents(21);
   assert.equal(eq.trees, '1.0');
