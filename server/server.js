@@ -7,7 +7,7 @@ require('dotenv').config();
 const connectDB = require('./config/db');
 const { initializeFirebaseAdmin } = require('./config/firebaseAdmin');
 
-const mapplsRoutes = require('./routes/mapplsRoutes');
+const mapsRoutes = require('./routes/mapsRoutes');
 const userRoutes = require('./routes/userRoutes');
 const journeyRoutes = require('./routes/journeyRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
@@ -31,7 +31,7 @@ app.use(cors({
 }));
 app.use(express.json());
 
-const mapplsLimiter = createRateLimiter({
+const mapsLimiter = createRateLimiter({
     windowMs: 15 * 60 * 1000,
     max: 60,
     message: 'Too many map requests, please try again in a few minutes.'
@@ -48,7 +48,7 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-app.use('/api/mappls', mapplsLimiter, mapplsRoutes);
+app.use('/api/maps', mapsLimiter, mapsRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/journeys', journeyRoutes);
 app.use('/api/dashboard', dashboardRoutes);

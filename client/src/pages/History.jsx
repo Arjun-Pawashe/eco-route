@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Download, Trash2 } from 'lucide-react';
 import API from '../services/api';
-import Sidebar from '../components/Sidebar';
+import TopNav from '../components/TopNav';
 
 function escapeCsvField(value) {
   const str = String(value ?? '');
@@ -83,63 +83,72 @@ export default function History() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F4F3F7] flex">
-      <Sidebar />
-      <main className="flex-1 min-w-0 p-5 pt-20 pb-24 md:p-10 md:pt-10 md:pb-10">
+    <div className="min-h-screen bg-[#F8F9FA] flex flex-col">
+      <TopNav />
+
+      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24 md:pb-10">
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6">
           <div>
-            <p className="text-xs font-semibold text-[#644DFF] mb-1.5">Trips</p>
-            <h1 className="text-3xl md:text-4xl font-bold tracking-[-0.02em] text-[#111018]">
-              Journey <span className="text-[#644DFF]">History</span>
+            <p className="text-xs font-semibold uppercase tracking-wider text-[#1A73E8] mb-1">
+              Trips
+            </p>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-[-0.02em] text-[#202124]">
+              Journey History
             </h1>
           </div>
           <button
             type="button"
             onClick={exportCsv}
             disabled={visible.length === 0}
-            className="inline-flex items-center gap-2 bg-[#FFFFFF] border-[1.5px] border-[#14121D] text-[#111018] px-4 py-2.5 rounded-[10px] text-sm font-semibold hover:bg-[#ECEAF3] disabled:opacity-50 self-start sm:self-auto transition cursor-pointer"
+            className="inline-flex items-center gap-2 bg-white border border-[#DADCE0] text-[#202124] px-4 py-2 rounded-full text-sm font-medium hover:bg-[#F1F3F4] disabled:opacity-50 self-start sm:self-auto transition cursor-pointer"
           >
             <Download size={16} />
             Export CSV
           </button>
         </div>
+
         <div className="flex gap-2 flex-wrap mb-6">
           {modes.map((mode) => (
             <button
               key={mode}
               onClick={() => setFilter(mode)}
-              className={`px-3.5 py-1.5 rounded-[8px] text-sm font-medium capitalize transition cursor-pointer ${
+              className={`px-3.5 py-1.5 rounded-full text-xs font-medium capitalize transition cursor-pointer ${
                 filter === mode
-                  ? 'bg-[#111018] text-white'
-                  : 'bg-[#ECEAF3] text-[#111018] hover:bg-[#E5E0FF] hover:text-[#5D45F8]'
+                  ? 'bg-[#1A73E8] text-white'
+                  : 'bg-white border border-[#DADCE0] text-[#5F6368] hover:bg-[#F1F3F4] hover:text-[#202124]'
               }`}
             >
               {mode}
             </button>
           ))}
         </div>
-        {loading && <p className="text-[#6E6B7B] text-sm">Loading journeys...</p>}
+
+        {loading && <p className="text-[#5F6368] text-sm">Loading journeys...</p>}
         {error && (
-          <p className="bg-[#FCE4E1] text-[#D94A38] text-sm font-medium p-3 rounded-[10px] mb-4">
+          <p className="bg-[#FCE8E6] text-[#C5221F] text-sm font-medium p-3 rounded-xl mb-4">
             {error}
           </p>
         )}
+
         <div className="space-y-4">
           {visible.map((journey) => (
-            <article key={journey._id} className="bg-[#FFFFFF] border border-[#E4E1F2] rounded-2xl p-5 shadow-sm">
+            <article
+              key={journey._id}
+              className="bg-white border border-[#DADCE0] rounded-2xl p-5 shadow-xs"
+            >
               <div className="flex justify-between gap-4">
                 <div>
-                  <p className="font-semibold text-[#111018]">
+                  <p className="font-semibold text-[#202124]">
                     {journey.origin.name} → {journey.destination.name}
                   </p>
-                  <p className="text-sm text-[#6E6B7B] capitalize mt-1">
+                  <p className="text-xs text-[#5F6368] capitalize mt-1">
                     {journey.transportMode} ·{' '}
                     {new Date(journey.createdAt).toLocaleDateString()}
                   </p>
                 </div>
                 <button
                   onClick={() => removeJourney(journey._id)}
-                  className="text-[#D94A38] p-2 hover:bg-[#FCE4E1] rounded-[10px] transition cursor-pointer"
+                  className="text-[#D93025] p-2 hover:bg-[#FCE8E6] rounded-full transition cursor-pointer self-start"
                   title="Delete journey"
                 >
                   <Trash2 size={18} />
@@ -161,24 +170,12 @@ export default function History() {
                   highlight
                 />
               </div>
-              {journey.legs?.length > 0 && (
-                <div className="mt-4 border-t border-[#E4E1F2] pt-3">
-                  <p className="text-sm font-semibold text-[#111018] mb-2">Journey legs</p>
-                  {journey.legs.map((leg, index) => (
-                    <p
-                      key={index}
-                      className="text-sm text-[#6E6B7B] capitalize"
-                    >
-                      {leg.mode}: {Number(leg.distance).toFixed(1)} km ·{' '}
-                      {leg.duration} min
-                    </p>
-                  ))}
-                </div>
-              )}
             </article>
           ))}
           {!loading && visible.length === 0 && (
-            <p className="text-[#6E6B7B] text-sm">No journeys found.</p>
+            <div className="bg-white border border-[#DADCE0] rounded-2xl p-8 text-center">
+              <p className="text-[#5F6368] text-sm">No journeys saved yet.</p>
+            </div>
           )}
         </div>
       </main>
@@ -188,9 +185,15 @@ export default function History() {
 
 function Badge({ label, value, highlight = false }) {
   return (
-    <div className={`${highlight ? 'bg-[#D9F7F4]' : 'bg-[#F4F3F7]'} rounded-[10px] p-3`}>
-      <p className={`text-xs ${highlight ? 'text-[#0E9F96]' : 'text-[#9A96A6]'}`}>{label}</p>
-      <p className="font-semibold text-[#111018] mt-0.5">{value}</p>
+    <div
+      className={`${
+        highlight ? 'bg-[#E6F4EA]' : 'bg-[#F8F9FA] border border-[#E8EAED]'
+      } rounded-xl p-3`}
+    >
+      <p className={`text-xs ${highlight ? 'text-[#137333]' : 'text-[#5F6368]'}`}>
+        {label}
+      </p>
+      <p className="font-semibold text-[#202124] mt-0.5">{value}</p>
     </div>
   );
 }

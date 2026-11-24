@@ -12,7 +12,7 @@ function ProtectedRoute() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F4F3F7] text-[#6E6B7B] font-medium">
+      <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA] text-[#5F6368] font-medium">
         Loading EcoRoute...
       </div>
     );
@@ -26,13 +26,13 @@ function HomeRedirect() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F4F3F7] text-[#6E6B7B] font-medium">
+      <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA] text-[#5F6368] font-medium">
         Loading EcoRoute...
       </div>
     );
   }
 
-  return <Navigate to={currentUser ? '/dashboard' : '/login'} replace />;
+  return <Navigate to={currentUser ? '/route-planner' : '/login'} replace />;
 }
 
 function App() {
@@ -44,8 +44,8 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route element={<ProtectedRoute />}>
-            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/route-planner" element={<RoutePlanner />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/history" element={<History />} />
             <Route path="/profile" element={<Profile />} />
           </Route>

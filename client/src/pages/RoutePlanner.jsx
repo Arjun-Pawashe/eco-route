@@ -1,68 +1,83 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   MapPin,
   Search,
   Navigation,
+  ArrowUpDown,
   Bus,
   Train,
   Car,
   Bike,
-  Footprints
+  Footprints,
+  Leaf,
+  Clock,
+  AlertTriangle,
+  Zap,
+  Check
 } from 'lucide-react';
 import API from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import {
   EMISSION_FACTORS,
   calculateEmissionResults,
+  calculateRouteEmission,
   decodePolyline,
   rankEmissionResults
 } from '../utils/carbonCalculator';
 import MapView from '../components/MapView';
-import Sidebar from '../components/Sidebar';
+import TopNav from '../components/TopNav';
 
 const TRANSPORT_MODES = [
-  { name: 'Bus', mode: 'bus', icon: Bus, factor: EMISSION_FACTORS.bus },
-  { name: 'Train', mode: 'train', icon: Train, factor: EMISSION_FACTORS.train },
-  { name: 'Car', mode: 'car', icon: Car, factor: EMISSION_FACTORS.car },
+  { name: 'Car', mode: 'car', routeKey: 'car', icon: Car, factor: EMISSION_FACTORS.car },
   {
     name: 'Two-wheeler',
     mode: 'two-wheeler',
+    routeKey: 'twoWheeler',
     icon: Bike,
     factor: EMISSION_FACTORS['two-wheeler']
   },
   {
-    name: 'Auto-rickshaw',
-    mode: 'auto-rickshaw',
-    icon: Car,
-    factor: EMISSION_FACTORS['auto-rickshaw']
-  },
-  {
     name: 'EV car',
     mode: 'ev-car',
-    icon: Car,
+    routeKey: 'car',
+    icon: Zap,
     factor: EMISSION_FACTORS['ev-car']
   },
   {
     name: 'EV scooter',
     mode: 'ev-scooter',
-    icon: Bike,
+    routeKey: 'twoWheeler',
+    icon: Zap,
     factor: EMISSION_FACTORS['ev-scooter']
   },
-  { name: 'Bicycle', mode: 'bike', icon: Bike, factor: EMISSION_FACTORS.bike },
+  {
+    name: 'Auto-rickshaw',
+    mode: 'auto-rickshaw',
+    routeKey: 'car',
+    icon: Car,
+    factor: EMISSION_FACTORS['auto-rickshaw']
+  },
+  { name: 'Bus', mode: 'bus', routeKey: 'transit', icon: Bus, factor: EMISSION_FACTORS.bus },
+  { name: 'Train', mode: 'train', routeKey: 'transit', icon: Train, factor: EMISSION_FACTORS.train },
+  { name: 'Bicycle', mode: 'bike', routeKey: 'bike', icon: Bike, factor: EMISSION_FACTORS.bike },
   {
     name: 'Walking',
     mode: 'walking',
+    routeKey: 'foot',
     icon: Footprints,
     factor: EMISSION_FACTORS.walking
   }
 ];
 
+const TRAFFIC_BADGE_STYLES = {
+  light: 'bg-[#E6F4EA] text-[#137333]',
+  moderate: 'bg-[#FEF7E0] text-[#B06000]',
+  heavy: 'bg-[#FCE8E6] text-[#C5221F]'
+};
+
 function RoutePlanner() {
   const { userProfile } = useAuth();
-
-  const [mapToken, setMapToken] = useState(
-    import.meta.env.VITE_MAPPLS_ACCESS_TOKEN || ''
-  );
+  const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 
   const [originQuery, setOriginQuery] = useState('');
   const [destinationQuery, setDestinationQuery] = useState('');
@@ -73,11 +88,9 @@ function RoutePlanner() {
   const [originResults, setOriginResults] = useState([]);
   const [destinationResults, setDestinationResults] = useState([]);
 
-  const [loading, setLoading] = useState('');
+  const [searchLoading, setSearchLoading] = useState('');
   const [error, setError] = useState('');
 
-  const [routeCoordinates, setRouteCoordinates] = useState([]);
-  const [routeInfo, setRouteInfo] = useState(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState('');
 
@@ -85,11 +98,22 @@ function RoutePlanner() {
   const [baselineVehicle, setBaselineVehicle] = useState('petrol-car');
   const [routePriorityOverride, setRoutePriorityOverride] = useState(null);
   const [savedModes, setSavedModes] = useState({});
+  const [activePanelTab, setActivePanelTab] = useState('routes'); // 'routes' | 'compare'
 
   const [routeOptions, setRouteOptions] = useState({
-    car: null,
-    bike: null,
-    foot: null
+    car: [],
+    twoWheeler: [],
+    transit: [],
+    bike: [],
+    foot: []
+  });
+
+  const [selectedRouteIndices, setSelectedRouteIndices] = useState({
+    car: 0,
+    twoWheeler: 0,
+    transit: 0,
+    bike: 0,
+    foot: 0
   });
 
   const travelPreference = userProfile?.travelPreference || 'balanced';
@@ -102,84 +126,73 @@ function RoutePlanner() {
         : 50;
   const routePriority = routePriorityOverride ?? defaultRoutePriority;
 
-  // Fetch Mappls SDK token from Render backend if not provided via env
-  useEffect(() => {
-    if (mapToken) return;
-
-    API.get('/mappls/token')
-      .then((res) => {
-        if (res.data?.accessToken) {
-          setMapToken(res.data.accessToken);
-        }
-      })
-      .catch((err) => {
-        setError(
-          err.response?.data?.message ||
-            'Could not load Mappls token. Check MAPPLS_CLIENT_ID and MAPPLS_CLIENT_SECRET in server/.env.'
-        );
-      });
-  }, [mapToken]);
-
+  // Fetch multiple alternative routes with live traffic from Google Routes API v2
   useEffect(() => {
     if (!origin || !destination) {
       setRouteOptions({
-        car: null,
-        bike: null,
-        foot: null
+        car: [],
+        twoWheeler: [],
+        transit: [],
+        bike: [],
+        foot: []
       });
-      setRouteCoordinates([]);
-      setRouteInfo(null);
+      setSelectedRouteIndices({
+        car: 0,
+        twoWheeler: 0,
+        transit: 0,
+        bike: 0,
+        foot: 0
+      });
       setSavedModes({});
       return;
     }
 
     const controller = new AbortController();
 
-    async function getAllRoutes() {
+    async function fetchAllRoutes() {
       setRouteLoading(true);
       setRouteError('');
-
-      setRouteOptions({
-        car: null,
-        bike: null,
-        foot: null
-      });
+      setSavedModes({});
 
       try {
         const response = await API.post(
-          '/mappls/routes',
+          '/maps/routes',
           { origin, destination },
           { signal: controller.signal }
         );
 
         const rawRoutes = response.data?.routes || {};
-        const parsed = {
-          car: rawRoutes.car
-            ? {
-                ...rawRoutes.car,
-                coordinates: decodePolyline(rawRoutes.car.geometry)
-              }
-            : null,
-          bike: rawRoutes.bike
-            ? {
-                ...rawRoutes.bike,
-                coordinates: decodePolyline(rawRoutes.bike.geometry)
-              }
-            : null,
-          foot: rawRoutes.foot
-            ? {
-                ...rawRoutes.foot,
-                coordinates: decodePolyline(rawRoutes.foot.geometry)
-              }
-            : null
-        };
+        const decodeList = (list) =>
+          (Array.isArray(list) ? list : []).map((r) => ({
+            ...r,
+            coordinates: decodePolyline(r.geometry)
+          }));
 
-        setRouteOptions(parsed);
+        setRouteOptions({
+          car: decodeList(rawRoutes.car),
+          twoWheeler: decodeList(rawRoutes.twoWheeler),
+          transit: decodeList(rawRoutes.transit),
+          bike: decodeList(rawRoutes.bike),
+          foot: decodeList(rawRoutes.foot)
+        });
+        setSelectedRouteIndices({
+          car: 0,
+          twoWheeler: 0,
+          transit: 0,
+          bike: 0,
+          foot: 0
+        });
 
         const failedModes = response.data?.failedModes || [];
-        if (failedModes.length > 0) {
+        if (
+          failedModes.length > 0 &&
+          decodeList(rawRoutes.car).length === 0 &&
+          decodeList(rawRoutes.transit).length === 0 &&
+          decodeList(rawRoutes.bike).length === 0 &&
+          decodeList(rawRoutes.foot).length === 0
+        ) {
           setRouteError(
-            `Could not calculate routes for: ${failedModes.join(', ')}.`
+            'Could not calculate routes for the selected locations. Verify GOOGLE_MAPS_API_KEY and Routes API.'
           );
         }
       } catch (err) {
@@ -195,52 +208,101 @@ function RoutePlanner() {
       }
     }
 
-    getAllRoutes();
+    fetchAllRoutes();
 
     return () => controller.abort();
   }, [origin, destination]);
 
-  useEffect(() => {
-    const selectedRoute = routeOptions[selectedMode];
+  const activeModeConfig =
+    TRANSPORT_MODES.find((m) => m.mode === selectedMode) || TRANSPORT_MODES[0];
+  const activeRouteKey = activeModeConfig.routeKey;
 
-    if (selectedRoute) {
-      setRouteCoordinates(selectedRoute.coordinates);
-
-      setRouteInfo({
-        distance: selectedRoute.distance.toFixed(2),
-        duration: selectedRoute.duration
-      });
-    } else {
-      setRouteCoordinates([]);
-      setRouteInfo(null);
+  const activeRoutes = useMemo(() => {
+    const list = routeOptions[activeRouteKey] || [];
+    if (list.length > 0) return list;
+    // Fallback to car routes for road-based modes if mode-specific route wasn't returned
+    if (
+      activeModeConfig.mode === 'two-wheeler' ||
+      activeModeConfig.mode === 'ev-scooter' ||
+      activeModeConfig.mode === 'bus' ||
+      activeModeConfig.mode === 'train'
+    ) {
+      return routeOptions.car || [];
     }
-  }, [routeOptions, selectedMode]);
+    return [];
+  }, [routeOptions, activeRouteKey, activeModeConfig.mode]);
 
-  const emissionResults = calculateEmissionResults({
-    transportModes: TRANSPORT_MODES,
-    routeOptions,
-    baselineVehicle
-  });
+  const effectiveRouteKey =
+    (routeOptions[activeRouteKey] || []).length > 0 ? activeRouteKey : 'car';
+  const selectedRouteIndex = selectedRouteIndices[effectiveRouteKey] ?? 0;
 
-  const rankedResults = rankEmissionResults(emissionResults, routePriority);
+  // Compute live-traffic emission for each alternative route in the active mode
+  const activeRoutesWithEmissions = useMemo(() => {
+    return activeRoutes.map((route) => {
+      const emissionStats = calculateRouteEmission({
+        distanceKm: route.distance,
+        durationMin: route.duration,
+        staticDurationMin: route.staticDuration,
+        trafficDelayMinutes: route.trafficDelayMinutes,
+        congestionRatio: route.congestionRatio,
+        mode: activeModeConfig.mode,
+        factor: activeModeConfig.factor
+      });
+      return {
+        ...route,
+        emission: emissionStats.totalEmission,
+        baseEmission: emissionStats.baseEmission,
+        trafficImpact: emissionStats.trafficImpact
+      };
+    });
+  }, [activeRoutes, activeModeConfig]);
+
+  // Identify which alternative route has the lowest CO2e
+  const ecoRouteIndex = useMemo(() => {
+    if (activeRoutesWithEmissions.length === 0) return null;
+    let bestIdx = 0;
+    let lowest = activeRoutesWithEmissions[0].emission;
+    activeRoutesWithEmissions.forEach((r, idx) => {
+      if (r.emission < lowest) {
+        lowest = r.emission;
+        bestIdx = idx;
+      }
+    });
+    return bestIdx;
+  }, [activeRoutesWithEmissions]);
+
+  const emissionResults = useMemo(
+    () =>
+      calculateEmissionResults({
+        transportModes: TRANSPORT_MODES,
+        routeOptions,
+        selectedRouteIndices,
+        baselineVehicle
+      }),
+    [routeOptions, selectedRouteIndices, baselineVehicle]
+  );
+
+  const rankedResults = useMemo(
+    () => rankEmissionResults(emissionResults, routePriority),
+    [emissionResults, routePriority]
+  );
   const recommendedMode = rankedResults[0]?.mode;
 
   async function searchLocation(query, type) {
     if (!query.trim()) {
-      setError('Please enter a location.');
+      setError('Please enter a location to search.');
       return;
     }
 
     setError('');
-    setLoading(type);
+    setSearchLoading(type);
 
     try {
-      const response = await API.get('/mappls/search', {
+      const response = await API.get('/maps/search', {
         params: { query: query.trim() }
       });
 
       const results = response.data?.results || [];
-
       if (type === 'origin') {
         setOriginResults(results);
       } else {
@@ -248,14 +310,14 @@ function RoutePlanner() {
       }
 
       if (results.length === 0) {
-        setError('No matching locations found. Try another search.');
+        setError('No matching locations found. Try a more specific address.');
       }
     } catch (err) {
       setError(
         err.response?.data?.message || err.message || 'Location search failed.'
       );
     } finally {
-      setLoading('');
+      setSearchLoading('');
     }
   }
 
@@ -269,11 +331,31 @@ function RoutePlanner() {
       setDestinationQuery(place.name);
       setDestinationResults([]);
     }
-
     setError('');
   }
 
-  async function saveJourney(mode) {
+  function swapLocations() {
+    const prevOrigin = origin;
+    const prevDest = destination;
+    const prevOriginQuery = originQuery;
+    const prevDestQuery = destinationQuery;
+
+    setOrigin(prevDest);
+    setDestination(prevOrigin);
+    setOriginQuery(prevDestQuery);
+    setDestinationQuery(prevOriginQuery);
+    setOriginResults([]);
+    setDestinationResults([]);
+  }
+
+  function handleSelectRouteIndex(idx) {
+    setSelectedRouteIndices((prev) => ({
+      ...prev,
+      [effectiveRouteKey]: idx
+    }));
+  }
+
+  async function saveJourney(modeResult) {
     if (!origin || !destination) return;
     try {
       await API.post('/journeys', {
@@ -285,14 +367,14 @@ function RoutePlanner() {
           name: destination.name,
           coordinates: { lat: destination.lat, lng: destination.lon }
         },
-        transportMode: mode.mode,
-        distance: Number(mode.distance),
-        duration: mode.duration ?? routeInfo?.duration ?? 0,
-        carbonEmission: Number(mode.emission),
-        carbonSaved: Math.max(0, Number(mode.carbonSaved)),
+        transportMode: modeResult.mode,
+        distance: Number(modeResult.distance),
+        duration: modeResult.duration ?? 0,
+        carbonEmission: Number(modeResult.emission),
+        carbonSaved: Math.max(0, Number(modeResult.carbonSaved)),
         preference: travelPreference
       });
-      setSavedModes((current) => ({ ...current, [mode.mode]: true }));
+      setSavedModes((current) => ({ ...current, [modeResult.mode]: true }));
     } catch (err) {
       setError(err.response?.data?.message || 'Could not save journey');
     }
@@ -304,377 +386,460 @@ function RoutePlanner() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F3F7] flex">
-      <Sidebar />
-      <main className="flex-1 min-w-0 p-5 pt-20 pb-24 md:p-10 md:pt-10 md:pb-10">
-        <div className="max-w-7xl mx-auto">
-          <p className="text-xs font-semibold text-[#644DFF] mb-1.5">Journey</p>
-          <h1 className="text-3xl md:text-4xl font-bold tracking-[-0.02em] text-[#111018]">
-            EcoRoute <span className="text-[#644DFF]">Planner</span>
-          </h1>
+    <div className="min-h-screen bg-[#F8F9FA] flex flex-col">
+      <TopNav />
 
-          <p className="text-[#6E6B7B] text-sm mt-2 mb-6">
-            Plan smarter journeys and reduce your carbon footprint.
-          </p>
-
-        {/* Location Search */}
-        <div className="bg-[#FFFFFF] p-6 rounded-2xl border border-[#E4E1F2] shadow-sm mb-6">
-          <h2 className="text-lg font-semibold text-[#111018] mb-5">
-            Plan Your Journey
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {/* Origin */}
-            <div>
-              <label className="block text-sm font-medium text-[#111018] mb-2">
-                <MapPin className="inline mr-2 text-[#644DFF]" size={16} />
-                Starting Location
-              </label>
-
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={originQuery}
-                  onChange={(e) => {
-                    setOriginQuery(e.target.value);
-                    setOrigin(null);
-                    setOriginResults([]);
-                  }}
-                  placeholder="Enter starting location (e.g. Swargate, Pune)..."
-                  className="w-full bg-[#ECEAF3] text-[#111018] placeholder-[#9A96A6] rounded-[10px] px-4 py-3 outline-none focus:ring-2 focus:ring-[#644DFF]"
-                />
-
-                <button
-                  onClick={() => searchLocation(originQuery, 'origin')}
-                  disabled={loading !== ''}
-                  className="bg-[#644DFF] text-white px-4 rounded-[10px] hover:bg-[#533CE6] disabled:opacity-50 transition cursor-pointer"
-                >
-                  <Search size={19} />
-                </button>
-              </div>
-
-              {loading === 'origin' && (
-                <p className="text-sm text-[#6E6B7B] mt-2">Searching...</p>
-              )}
-
-              {originResults.length > 0 && (
-                <div className="border border-[#E4E1F2] bg-white rounded-[10px] mt-2 divide-y divide-[#E4E1F2]">
-                  {originResults.map((place, index) => (
-                    <button
-                      key={`${place.lat}-${place.lon}-${index}`}
-                      onClick={() => selectLocation(place, 'origin')}
-                      className="w-full text-left p-3 text-sm text-[#111018] hover:bg-[#ECEAF3] transition"
-                    >
-                      {place.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {savedPlaces.length > 0 && (
-                <div className="flex gap-2 mt-2.5 flex-wrap">
-                  {savedPlaces.map((place) => {
-                    const isActive = origin?.name === place.name;
-                    return (
-                      <button
-                        key={place.label}
-                        type="button"
-                        onClick={() => applySavedPlace(place, 'origin')}
-                        className={`text-xs px-3 py-1.5 rounded-[8px] font-medium transition cursor-pointer ${
-                          isActive
-                            ? 'bg-[#644DFF] text-white'
-                            : 'bg-[#ECEAF3] text-[#111018] hover:bg-[#E5E0FF] hover:text-[#5D45F8]'
-                        }`}
-                      >
-                        {place.label}: {place.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0 pb-16 md:pb-0">
+        {/* Google Maps Style Left Directions & Routes Drawer */}
+        <aside className="w-full lg:w-[440px] xl:w-[470px] shrink-0 bg-white border-r border-[#DADCE0] flex flex-col lg:h-[calc(100vh-4rem)] lg:overflow-y-auto z-10 shadow-[0_2px_8px_rgba(60,64,67,0.08)]">
+          {/* Travel Mode Strip */}
+          <div className="p-4 border-b border-[#E8EAED]">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+              {TRANSPORT_MODES.map((m) => {
+                const Icon = m.icon;
+                const isSelected = selectedMode === m.mode;
+                return (
+                  <button
+                    key={m.mode}
+                    type="button"
+                    onClick={() => setSelectedMode(m.mode)}
+                    title={m.name}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium shrink-0 transition cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#E8F0FE] text-[#1A73E8] border border-[#D2E3FC]'
+                        : 'bg-[#F1F3F4] text-[#5F6368] border border-transparent hover:bg-[#E8EAED] hover:text-[#202124]'
+                    }`}
+                  >
+                    <Icon size={14} />
+                    <span>{m.name}</span>
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Destination */}
-            <div>
-              <label className="block text-sm font-medium text-[#111018] mb-2">
-                <Navigation className="inline mr-2 text-[#FF5D47]" size={16} />
-                Destination
-              </label>
-
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={destinationQuery}
-                  onChange={(e) => {
-                    setDestinationQuery(e.target.value);
-                    setDestination(null);
-                    setDestinationResults([]);
-                  }}
-                  placeholder="Enter destination (e.g. Hinjewadi, Pune)..."
-                  className="w-full bg-[#ECEAF3] text-[#111018] placeholder-[#9A96A6] rounded-[10px] px-4 py-3 outline-none focus:ring-2 focus:ring-[#644DFF]"
-                />
-
-                <button
-                  onClick={() =>
-                    searchLocation(destinationQuery, 'destination')
-                  }
-                  disabled={loading !== ''}
-                  className="bg-[#644DFF] text-white px-4 rounded-[10px] hover:bg-[#533CE6] disabled:opacity-50 transition cursor-pointer"
-                >
-                  <Search size={19} />
-                </button>
-              </div>
-
-              {loading === 'destination' && (
-                <p className="text-sm text-[#6E6B7B] mt-2">Searching...</p>
-              )}
-
-              {destinationResults.length > 0 && (
-                <div className="border border-[#E4E1F2] bg-white rounded-[10px] mt-2 divide-y divide-[#E4E1F2]">
-                  {destinationResults.map((place, index) => (
-                    <button
-                      key={`${place.lat}-${place.lon}-${index}`}
-                      onClick={() => selectLocation(place, 'destination')}
-                      className="w-full text-left p-3 text-sm text-[#111018] hover:bg-[#ECEAF3] transition"
-                    >
-                      {place.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {savedPlaces.length > 0 && (
-                <div className="flex gap-2 mt-2.5 flex-wrap">
-                  {savedPlaces.map((place) => {
-                    const isActive = destination?.name === place.name;
-                    return (
-                      <button
-                        key={place.label}
-                        type="button"
-                        onClick={() => applySavedPlace(place, 'destination')}
-                        className={`text-xs px-3 py-1.5 rounded-[8px] font-medium transition cursor-pointer ${
-                          isActive
-                            ? 'bg-[#644DFF] text-white'
-                            : 'bg-[#ECEAF3] text-[#111018] hover:bg-[#E5E0FF] hover:text-[#5D45F8]'
-                        }`}
-                      >
-                        {place.label}: {place.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-          {error && (
-            <p className="bg-[#FCE4E1] text-[#D94A38] text-sm font-medium p-3 rounded-[10px] mt-4">
-              {error}
-            </p>
-          )}
-
-          <p className="text-xs text-[#9A96A6] mt-3 mb-4">
-            Location search, maps, and routing powered by Mappls (MapmyIndia).
-          </p>
-
-        {/* Map */}
-        <MapView
-          accessToken={mapToken}
-          origin={origin}
-          destination={destination}
-          routeCoordinates={routeCoordinates}
-        />
-
-        {/* Travel Mode Selector */}
-        <div className="bg-[#FFFFFF] rounded-2xl border border-[#E4E1F2] shadow-sm p-6 mt-6">
-          <h2 className="text-lg font-semibold text-[#111018] mb-4">
-            Select Travel Mode
-          </h2>
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-[#111018] mb-2">
-              Baseline vehicle
-            </label>
-            <select
-              value={baselineVehicle}
-              onChange={(e) => setBaselineVehicle(e.target.value)}
-              className="bg-[#ECEAF3] text-[#111018] rounded-[10px] px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-[#644DFF]"
-            >
-              <option value="petrol-car">Petrol Car — 0.17 kg/km</option>
-              <option value="diesel-car">Diesel Car — 0.16 kg/km</option>
-              <option value="petrol-two-wheeler">
-                Petrol Two-Wheeler — 0.05 kg/km
-              </option>
-              <option value="ev-car">EV Car — 0.05 kg/km</option>
-              <option value="auto-rickshaw">Auto-Rickshaw — 0.09 kg/km</option>
-            </select>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { id: 'car', label: 'Car', icon: Car },
-              { id: 'bike', label: 'Bicycle', icon: Bike },
-              { id: 'foot', label: 'Walking', icon: Footprints }
-            ].map((mode) => (
-              <button
-                key={mode.id}
-                onClick={() => setSelectedMode(mode.id)}
-                className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition cursor-pointer ${
-                  selectedMode === mode.id
-                    ? 'bg-[#E5E0FF] border-[#644DFF] text-[#5D45F8]'
-                    : 'bg-[#FFFFFF] border-[#E4E1F2] text-[#6E6B7B] hover:border-[#644DFF]/50 hover:text-[#111018]'
-                }`}
-              >
-                <mode.icon size={24} />
-                <span className="font-semibold text-sm">{mode.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {routeLoading && (
-          <p className="mt-4 text-sm font-medium text-[#644DFF]">Calculating your route...</p>
-        )}
-
-        {routeError && (
-          <p className="mt-4 bg-[#FCE4E1] text-[#D94A38] text-sm font-medium p-3 rounded-[10px]">
-            {routeError}
-          </p>
-        )}
-
-        {routeInfo && (
-          <div className="bg-[#FFFFFF] rounded-2xl border border-[#E4E1F2] shadow-sm p-6 mt-6">
-            <h2 className="text-2xl font-bold tracking-[-0.02em] text-[#111018] mb-1">
-              Carbon Emission Comparison
-            </h2>
-
-            <p className="text-[#6E6B7B] text-sm mb-6">
-              Compare the available routes by travel time and estimated carbon
-              emissions.
-            </p>
-
-            <div className="mb-6 rounded-xl border border-[#E4E1F2] bg-[#F9F8FC] p-4">
-              <div className="flex items-center justify-between gap-4">
-                <label
-                  htmlFor="route-priority"
-                  className="text-sm font-semibold text-[#111018]"
-                >
-                  Route priority
-                </label>
-                <span className="text-xs font-medium text-[#6E6B7B]">
-                  {routePriority}% emissions
-                </span>
-              </div>
-              <input
-                id="route-priority"
-                type="range"
-                min="0"
-                max="100"
-                value={routePriority}
-                onChange={(event) =>
-                  setRoutePriorityOverride(Number(event.target.value))
-                }
-                aria-label="Route priority from fastest time to lowest emissions"
-                className="mt-3 w-full accent-[#644DFF] cursor-pointer"
-              />
-              <div className="flex justify-between text-xs font-medium text-[#6E6B7B]">
-                <span>Fastest time</span>
-                <span>Lowest emissions</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {rankedResults.map((mode) => (
-                <div
-                  key={mode.name}
-                  className={`relative border rounded-2xl p-5 transition ${
-                    mode.mode === recommendedMode
-                      ? 'border-2 border-[#644DFF] bg-[#F4F3F7]'
-                      : 'border-[#E4E1F2] bg-[#FFFFFF] hover:border-[#644DFF]/50'
-                  }`}
-                >
-                  {mode.mode === recommendedMode && (
-                    <span className="inline-flex items-center gap-1 bg-[#D9F7F4] text-[#0E9F96] text-xs font-semibold px-3 py-1 rounded-[8px] mb-3">
-                      <span>✓</span>
-                      Recommended
-                    </span>
-                  )}
-
-                  <div className="w-11 h-11 rounded-[10px] bg-[#E5E0FF] flex items-center justify-center mb-3">
-                    <mode.icon
-                      size={22}
-                      className="text-[#644DFF]"
-                      strokeWidth={1.8}
+            {/* Origin & Destination Inputs */}
+            <div className="mt-4 flex items-stretch gap-2">
+              <div className="flex-1 space-y-2.5">
+                {/* Origin */}
+                <div>
+                  <div className="flex items-center gap-2 bg-[#F1F3F4] rounded-xl px-3 py-2 focus-within:bg-white focus-within:ring-2 focus-within:ring-[#1A73E8] border border-transparent focus-within:border-[#1A73E8] transition">
+                    <MapPin size={16} className="text-[#1A73E8] shrink-0" />
+                    <input
+                      type="text"
+                      value={originQuery}
+                      onChange={(e) => {
+                        setOriginQuery(e.target.value);
+                        setOrigin(null);
+                        setOriginResults([]);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') searchLocation(originQuery, 'origin');
+                      }}
+                      placeholder="Choose starting point..."
+                      className="w-full bg-transparent text-sm text-[#202124] placeholder-[#5F6368] outline-none"
                     />
+                    <button
+                      type="button"
+                      onClick={() => searchLocation(originQuery, 'origin')}
+                      disabled={searchLoading !== ''}
+                      className="p-1.5 rounded-lg text-[#1A73E8] hover:bg-[#E8F0FE] disabled:opacity-40 cursor-pointer"
+                      aria-label="Search starting location"
+                    >
+                      <Search size={16} />
+                    </button>
                   </div>
 
-                  <h3 className="font-semibold text-lg text-[#111018]">
-                    {mode.name}
-                  </h3>
-
-                  <p className="text-sm text-[#6E6B7B] mt-2">
-                    Distance: <span className="text-[#111018] font-medium">{mode.distance} km</span>
-                    {mode.approximateDistance && (
-                      <span className="text-xs text-[#5D45F8] block">
-                        Approximate route distance
-                      </span>
-                    )}
-                  </p>
-
-                  {mode.duration != null && (
-                    <p className="text-sm text-[#6E6B7B] mt-1">
-                      Travel time: <span className="text-[#111018] font-medium">{mode.duration} min</span>
-                      {mode.approximateDuration && (
-                        <span className="text-xs text-[#5D45F8] block">
-                          Approximate travel time
-                        </span>
-                      )}
-                    </p>
+                  {searchLoading === 'origin' && (
+                    <p className="text-xs text-[#5F6368] mt-1.5 pl-1">Searching Google Places...</p>
                   )}
 
-                  <p className="text-2xl font-bold tracking-[-0.02em] text-[#111018] mt-2">
-                    {mode.emission} kg
-                  </p>
-
-                  <p className="text-xs text-[#9A96A6] mt-0.5">
-                    CO₂e per journey
-                  </p>
-
-                  {mode.name !== 'Car' && (
-                    <p className="text-xs font-semibold text-[#0E9F96] bg-[#D9F7F4] inline-block px-2.5 py-1 rounded-[6px] mt-3">
-                      {Number(mode.carbonSaved) > 0
-                        ? `${mode.carbonSaved} kg less than baseline`
-                        : 'Same as baseline'}
-                    </p>
+                  {originResults.length > 0 && (
+                    <div className="mt-1.5 bg-white border border-[#DADCE0] rounded-xl shadow-md divide-y divide-[#F1F3F4] overflow-hidden">
+                      {originResults.map((place, idx) => (
+                        <button
+                          key={`${place.lat}-${place.lon}-${idx}`}
+                          type="button"
+                          onClick={() => selectLocation(place, 'origin')}
+                          className="w-full text-left px-3.5 py-2.5 text-xs text-[#202124] hover:bg-[#F8F9FA] flex items-start gap-2 cursor-pointer"
+                        >
+                          <MapPin size={14} className="text-[#5F6368] mt-0.5 shrink-0" />
+                          <span>{place.name}</span>
+                        </button>
+                      ))}
+                    </div>
                   )}
-                  <p className="text-sm text-[#6E6B7B] mt-3">
-                    Estimated cost: <span className="text-[#111018] font-medium">₹{mode.cost}</span>
-                  </p>
-                  {Number(mode.costSaved) > 0 && (
-                    <p className="text-xs font-semibold text-[#0E9F96] mt-1">
-                      ₹{mode.costSaved} saved
-                    </p>
-                  )}
-                  <button
-                    onClick={() => saveJourney(mode)}
-                    disabled={savedModes[mode.mode]}
-                    className="mt-4 w-full rounded-[10px] bg-[#644DFF] text-white font-semibold py-2.5 hover:bg-[#533CE6] disabled:bg-[#ECEAF3] disabled:text-[#6E6B7B] transition cursor-pointer"
-                  >
-                    {savedModes[mode.mode] ? 'Saved' : 'Save Journey'}
-                  </button>
                 </div>
-              ))}
+
+                {/* Destination */}
+                <div>
+                  <div className="flex items-center gap-2 bg-[#F1F3F4] rounded-xl px-3 py-2 focus-within:bg-white focus-within:ring-2 focus-within:ring-[#1A73E8] border border-transparent focus-within:border-[#1A73E8] transition">
+                    <Navigation size={16} className="text-[#EA4335] shrink-0" />
+                    <input
+                      type="text"
+                      value={destinationQuery}
+                      onChange={(e) => {
+                        setDestinationQuery(e.target.value);
+                        setDestination(null);
+                        setDestinationResults([]);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') searchLocation(destinationQuery, 'destination');
+                      }}
+                      placeholder="Choose destination..."
+                      className="w-full bg-transparent text-sm text-[#202124] placeholder-[#5F6368] outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => searchLocation(destinationQuery, 'destination')}
+                      disabled={searchLoading !== ''}
+                      className="p-1.5 rounded-lg text-[#1A73E8] hover:bg-[#E8F0FE] disabled:opacity-40 cursor-pointer"
+                      aria-label="Search destination"
+                    >
+                      <Search size={16} />
+                    </button>
+                  </div>
+
+                  {searchLoading === 'destination' && (
+                    <p className="text-xs text-[#5F6368] mt-1.5 pl-1">Searching Google Places...</p>
+                  )}
+
+                  {destinationResults.length > 0 && (
+                    <div className="mt-1.5 bg-white border border-[#DADCE0] rounded-xl shadow-md divide-y divide-[#F1F3F4] overflow-hidden">
+                      {destinationResults.map((place, idx) => (
+                        <button
+                          key={`${place.lat}-${place.lon}-${idx}`}
+                          type="button"
+                          onClick={() => selectLocation(place, 'destination')}
+                          className="w-full text-left px-3.5 py-2.5 text-xs text-[#202124] hover:bg-[#F8F9FA] flex items-start gap-2 cursor-pointer"
+                        >
+                          <MapPin size={14} className="text-[#EA4335] mt-0.5 shrink-0" />
+                          <span>{place.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Swap Origin & Destination */}
+              <div className="flex items-center">
+                <button
+                  type="button"
+                  onClick={swapLocations}
+                  title="Swap starting point and destination"
+                  className="p-2 rounded-full text-[#5F6368] hover:bg-[#F1F3F4] hover:text-[#202124] transition cursor-pointer"
+                  aria-label="Swap locations"
+                >
+                  <ArrowUpDown size={18} />
+                </button>
+              </div>
             </div>
 
-            <p className="text-xs text-[#9A96A6] mt-5">
-              Emission factors are illustrative for prototype testing. Car,
-              bicycle and walking use their respective Mappls route distances
-              and durations. Bus, train, and other road modes use approximate
-              car-route distances and estimated travel times. Actual emissions
-              may vary.
-            </p>
+            {/* Saved Places Chips */}
+            {savedPlaces.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {savedPlaces.map((place) => (
+                  <button
+                    key={place.label}
+                    type="button"
+                    onClick={() =>
+                      applySavedPlace(place, origin ? 'destination' : 'origin')
+                    }
+                    className="text-xs px-2.5 py-1 rounded-full bg-[#F1F3F4] text-[#3C4043] hover:bg-[#E8F0FE] hover:text-[#1A73E8] font-medium transition cursor-pointer"
+                  >
+                    {place.label}: {place.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {error && (
+              <div className="mt-3 flex items-start gap-2 bg-[#FCE8E6] text-[#C5221F] text-xs font-medium p-3 rounded-xl">
+                <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
           </div>
-        )}
-        </div>
-      </main>
+
+          {/* Sub-tabs: Multiple Routes vs Mode Comparison */}
+          <div className="grid grid-cols-2 border-b border-[#E8EAED] bg-[#F8F9FA]">
+            <button
+              type="button"
+              onClick={() => setActivePanelTab('routes')}
+              className={`py-2.5 text-xs font-semibold border-b-2 transition cursor-pointer ${
+                activePanelTab === 'routes'
+                  ? 'border-[#1A73E8] text-[#1A73E8] bg-white'
+                  : 'border-transparent text-[#5F6368] hover:text-[#202124]'
+              }`}
+            >
+              Routes ({activeRoutesWithEmissions.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActivePanelTab('compare')}
+              className={`py-2.5 text-xs font-semibold border-b-2 transition cursor-pointer ${
+                activePanelTab === 'compare'
+                  ? 'border-[#1A73E8] text-[#1A73E8] bg-white'
+                  : 'border-transparent text-[#5F6368] hover:text-[#202124]'
+              }`}
+            >
+              Compare Modes ({rankedResults.length})
+            </button>
+          </div>
+
+          {/* Panel Body */}
+          <div className="p-4 flex-1 space-y-3">
+            {routeLoading && (
+              <div className="p-4 rounded-xl bg-[#E8F0FE] text-[#1967D2] text-xs font-medium">
+                Fetching live Google Maps routes & traffic conditions...
+              </div>
+            )}
+
+            {routeError && (
+              <div className="p-3 rounded-xl bg-[#FCE8E6] text-[#C5221F] text-xs font-medium">
+                {routeError}
+              </div>
+            )}
+
+            {!origin || !destination ? (
+              <div className="py-10 text-center px-4">
+                <div className="w-12 h-12 rounded-full bg-[#E8F0FE] text-[#1A73E8] flex items-center justify-center mx-auto mb-3">
+                  <Navigation size={22} />
+                </div>
+                <p className="text-sm font-semibold text-[#202124]">
+                  Search origin and destination
+                </p>
+                <p className="text-xs text-[#5F6368] mt-1">
+                  Compare multiple live-traffic Google Maps routes and see real-time
+                  time, distance, and congestion-adjusted CO₂e estimates.
+                </p>
+              </div>
+            ) : activePanelTab === 'routes' ? (
+              <div className="space-y-2.5">
+                {activeRoutesWithEmissions.length === 0 && !routeLoading && (
+                  <p className="text-xs text-[#5F6368] py-6 text-center">
+                    No routes returned for {activeModeConfig.name}. Try another travel mode.
+                  </p>
+                )}
+
+                {activeRoutesWithEmissions.map((route, idx) => {
+                  const isSelected = idx === selectedRouteIndex;
+                  const isEco = idx === ecoRouteIndex;
+                  const trafficBadge =
+                    TRAFFIC_BADGE_STYLES[route.trafficStatus] ||
+                    TRAFFIC_BADGE_STYLES.light;
+
+                  return (
+                    <div
+                      key={route.id || idx}
+                      onClick={() => handleSelectRouteIndex(idx)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          handleSelectRouteIndex(idx);
+                        }
+                      }}
+                      className={`p-3.5 rounded-xl border transition cursor-pointer ${
+                        isSelected
+                          ? isEco
+                            ? 'border-2 border-[#188038] bg-[#E6F4EA]/40 shadow-sm'
+                            : 'border-2 border-[#1A73E8] bg-[#E8F0FE]/40 shadow-sm'
+                          : 'border-[#DADCE0] bg-white hover:bg-[#F8F9FA]'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-base font-bold text-[#202124]">
+                              {route.duration} min
+                            </span>
+                            <span className="text-xs font-medium text-[#5F6368]">
+                              ({route.distance} km)
+                            </span>
+                            {isEco && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#E6F4EA] text-[#137333]">
+                                <Leaf size={11} />
+                                Most eco
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-[#5F6368] mt-1">
+                            via <span className="font-medium text-[#3C4043]">{route.summary}</span>
+                          </p>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-bold text-[#202124]">
+                            {route.emission.toFixed(2)} kg
+                          </p>
+                          <p className="text-[11px] text-[#5F6368]">CO₂e</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-2.5 flex items-center justify-between gap-2 flex-wrap">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${trafficBadge}`}
+                        >
+                          <Clock size={11} />
+                          {route.trafficDelayMinutes > 0
+                            ? `+${route.trafficDelayMinutes} min live traffic`
+                            : 'Clear live traffic'}
+                        </span>
+
+                        {route.trafficImpact > 0 && (
+                          <span className="text-[11px] text-[#5F6368]">
+                            Base {route.baseEmission.toFixed(2)} kg + Traffic{' '}
+                            +{route.trafficImpact.toFixed(2)} kg
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Baseline & Priority Controls */}
+                <div className="p-3.5 rounded-xl bg-[#F8F9FA] border border-[#E8EAED] space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#3C4043] mb-1">
+                      Baseline vehicle for savings
+                    </label>
+                    <select
+                      value={baselineVehicle}
+                      onChange={(e) => setBaselineVehicle(e.target.value)}
+                      className="w-full bg-white border border-[#DADCE0] text-xs text-[#202124] rounded-lg px-3 py-2 outline-none focus:border-[#1A73E8]"
+                    >
+                      <option value="petrol-car">Petrol Car (0.17 kg/km)</option>
+                      <option value="diesel-car">Diesel Car (0.16 kg/km)</option>
+                      <option value="petrol-two-wheeler">
+                        Petrol Two-Wheeler (0.05 kg/km)
+                      </option>
+                      <option value="ev-car">EV Car (0.05 kg/km)</option>
+                      <option value="auto-rickshaw">Auto-Rickshaw (0.09 kg/km)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="font-semibold text-[#3C4043]">Route priority</span>
+                      <span className="text-[#5F6368]">{routePriority}% eco weight</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={routePriority}
+                      onChange={(e) => setRoutePriorityOverride(Number(e.target.value))}
+                      className="w-full accent-[#1A73E8] cursor-pointer"
+                    />
+                    <div className="flex justify-between text-[11px] text-[#5F6368]">
+                      <span>Fastest time</span>
+                      <span>Lowest CO₂e</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ranked Mode Cards */}
+                {rankedResults.map((item) => {
+                  const Icon = item.icon;
+                  const isRecommended = item.mode === recommendedMode;
+                  const trafficBadge =
+                    TRAFFIC_BADGE_STYLES[item.trafficStatus] ||
+                    TRAFFIC_BADGE_STYLES.light;
+
+                  return (
+                    <div
+                      key={item.mode}
+                      className={`p-3.5 rounded-xl border transition ${
+                        isRecommended
+                          ? 'border-2 border-[#188038] bg-[#E6F4EA]/30'
+                          : 'border-[#DADCE0] bg-white'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-9 h-9 rounded-full bg-[#E8F0FE] text-[#1A73E8] flex items-center justify-center shrink-0">
+                            <Icon size={18} />
+                          </span>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <h3 className="text-sm font-semibold text-[#202124]">
+                                {item.name}
+                              </h3>
+                              {isRecommended && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#E6F4EA] text-[#137333]">
+                                  Recommended
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-[#5F6368]">
+                              {item.distance} km · {item.duration ?? '—'} min
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <p className="text-base font-bold text-[#202124]">
+                            {item.emission} kg
+                          </p>
+                          <p className="text-[11px] text-[#5F6368]">CO₂e</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-2.5 flex items-center justify-between gap-2 text-[11px] flex-wrap">
+                        <span className={`px-2 py-0.5 rounded-md font-medium ${trafficBadge}`}>
+                          {item.trafficDelayMinutes > 0
+                            ? `+${item.trafficDelayMinutes} min traffic (+${item.trafficImpact} kg)`
+                            : 'Clear traffic'}
+                        </span>
+                        <span className="text-[#5F6368]">
+                          Est. ₹{item.cost}
+                          {Number(item.carbonSaved) > 0 && (
+                            <span className="text-[#137333] font-semibold ml-2">
+                              · {item.carbonSaved} kg saved
+                            </span>
+                          )}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => saveJourney(item)}
+                        disabled={savedModes[item.mode]}
+                        className="mt-3 w-full py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 bg-[#1A73E8] text-white hover:bg-[#1765CC] disabled:bg-[#E6F4EA] disabled:text-[#137333] transition cursor-pointer"
+                      >
+                        {savedModes[item.mode] ? (
+                          <>
+                            <Check size={14} />
+                            Saved to History
+                          </>
+                        ) : (
+                          'Save Journey'
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </aside>
+
+        {/* Full-Bleed Google Map Canvas */}
+        <main className="flex-1 min-w-0 lg:h-[calc(100vh-4rem)]">
+          <MapView
+            apiKey={googleMapsApiKey}
+            origin={origin}
+            destination={destination}
+            routes={activeRoutesWithEmissions}
+            selectedRouteIndex={selectedRouteIndex}
+            onSelectRoute={handleSelectRouteIndex}
+            ecoRouteIndex={ecoRouteIndex}
+          />
+        </main>
+      </div>
     </div>
   );
 }

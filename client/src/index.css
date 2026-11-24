@@ -6,9 +6,9 @@
 
 body {
     margin: 0;
-    font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
-    background: #F4F3F7;
-    color: #111018;
+    font-family: Inter, Roboto, "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: #F8F9FA;
+    color: #202124;
     -webkit-font-smoothing: antialiased;
 }
 
@@ -24,6 +24,6 @@ a {
 }
 
 ::selection {
-    background: #E5E0FF;
-    color: #281950;
+    background: #D2E3FC;
+    color: #174EA6;
 }

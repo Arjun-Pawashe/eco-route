@@ -44,7 +44,7 @@ function Login() {
 
     try {
       await login(formData.email, formData.password);
-      navigate('/dashboard');
+      navigate('/route-planner');
     } catch (err) {
       setError(getAuthErrorMessage(err));
     } finally {
@@ -57,7 +57,7 @@ function Login() {
     setLoading(true);
     try {
       await loginWithGoogle();
-      navigate('/dashboard');
+      navigate('/route-planner');
     } catch (err) {
       setError(getAuthErrorMessage(err));
     } finally {
@@ -66,39 +66,42 @@ function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#F4F3F7] px-4 py-10">
-      <div className="bg-[#FFFFFF] w-full max-w-md p-8 sm:p-10 rounded-[20px] border-2 border-[#281950] shadow-[0_20px_60px_rgba(40,25,80,0.10)]">
+    <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA] px-4 py-10">
+      <div className="bg-white w-full max-w-md p-8 sm:p-10 rounded-2xl border border-[#DADCE0] shadow-sm">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-3">
-            <div className="bg-[#E5E0FF] p-3 rounded-[12px]">
-              <Leaf size={28} className="text-[#644DFF]" />
+            <div className="bg-[#E6F4EA] border border-[#CEEAD6] p-3 rounded-full">
+              <Leaf size={26} className="text-[#188038]" />
             </div>
           </div>
 
-          <h1 className="text-3xl font-bold tracking-[-0.02em] text-[#111018]">
-            Eco<span className="text-[#644DFF]">Route</span>
+          <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#202124]">
+            Eco<span className="text-[#1A73E8]">Route</span>
           </h1>
 
-          <p className="text-[#6E6B7B] mt-2 text-sm">Smarter Routes. Greener Future.</p>
+          <p className="text-[#5F6368] mt-1.5 text-sm">
+            Google Maps navigation with live traffic & CO₂e insights.
+          </p>
         </div>
 
-        <h2 className="text-xl font-semibold tracking-[-0.01em] text-[#111018] mb-1">Welcome Back</h2>
-
-        <p className="text-[#6E6B7B] text-sm mb-6">Login to continue your journey.</p>
+        <h2 className="text-lg font-semibold text-[#202124] mb-1">Sign in</h2>
+        <p className="text-[#5F6368] text-sm mb-6">
+          Use your EcoRoute account to continue.
+        </p>
 
         {error && (
-          <p className="bg-[#FCE4E1] text-[#D94A38] text-sm font-medium p-3 rounded-[10px] mb-4">{error}</p>
+          <p className="bg-[#FCE8E6] text-[#C5221F] text-sm font-medium p-3 rounded-xl mb-4">
+            {error}
+          </p>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block mb-1.5 text-sm font-medium text-[#111018]">
+            <label className="block mb-1.5 text-xs font-medium text-[#3C4043]">
               Email Address
             </label>
-
-            <div className="flex items-center bg-[#ECEAF3] rounded-[10px] px-3.5 focus-within:ring-2 focus-within:ring-[#644DFF]">
-              <Mail size={18} className="text-[#6E6B7B]" />
-
+            <div className="flex items-center bg-[#F8F9FA] border border-[#DADCE0] rounded-xl px-3.5 focus-within:border-[#1A73E8] focus-within:bg-white transition">
+              <Mail size={17} className="text-[#5F6368]" />
               <input
                 type="email"
                 name="email"
@@ -106,17 +109,17 @@ function Login() {
                 value={formData.email}
                 onChange={handleChange}
                 required
-                className="w-full p-3 bg-transparent text-[#111018] placeholder-[#9A96A6] outline-none"
+                className="w-full p-3 bg-transparent text-sm text-[#202124] placeholder-[#80868B] outline-none"
               />
             </div>
           </div>
 
           <div>
-            <label className="block mb-1.5 text-sm font-medium text-[#111018]">Password</label>
-
-            <div className="flex items-center bg-[#ECEAF3] rounded-[10px] px-3.5 focus-within:ring-2 focus-within:ring-[#644DFF]">
-              <Lock size={18} className="text-[#6E6B7B]" />
-
+            <label className="block mb-1.5 text-xs font-medium text-[#3C4043]">
+              Password
+            </label>
+            <div className="flex items-center bg-[#F8F9FA] border border-[#DADCE0] rounded-xl px-3.5 focus-within:border-[#1A73E8] focus-within:bg-white transition">
+              <Lock size={17} className="text-[#5F6368]" />
               <input
                 type="password"
                 name="password"
@@ -124,7 +127,7 @@ function Login() {
                 value={formData.password}
                 onChange={handleChange}
                 required
-                className="w-full p-3 bg-transparent text-[#111018] placeholder-[#9A96A6] outline-none"
+                className="w-full p-3 bg-transparent text-sm text-[#202124] placeholder-[#80868B] outline-none"
               />
             </div>
           </div>
@@ -132,9 +135,9 @@ function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[#644DFF] text-white font-semibold py-3 rounded-[10px] hover:bg-[#533CE6] transition disabled:opacity-60 cursor-pointer"
+            className="w-full bg-[#1A73E8] text-white font-semibold py-2.5 rounded-full hover:bg-[#1765CC] transition disabled:opacity-60 cursor-pointer"
           >
-            {loading ? 'Logging in...' : 'Login'}
+            {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
 
@@ -143,16 +146,16 @@ function Login() {
             type="button"
             onClick={handleGoogleLogin}
             disabled={loading}
-            className="w-full bg-white border-[1.5px] border-[#14121D] text-[#111018] py-3 rounded-[10px] hover:bg-[#F4F3F7] transition disabled:opacity-60 font-semibold cursor-pointer"
+            className="w-full bg-white border border-[#DADCE0] text-[#3C4043] py-2.5 rounded-full hover:bg-[#F8F9FA] transition disabled:opacity-60 font-medium text-sm cursor-pointer"
           >
             Continue with Google
           </button>
         </div>
 
-        <p className="text-center mt-6 text-sm text-[#6E6B7B]">
-          Don't have an account?{' '}
-          <Link to="/register" className="text-[#644DFF] font-semibold hover:underline">
-            Register
+        <p className="text-center mt-6 text-sm text-[#5F6368]">
+          Don&apos;t have an account?{' '}
+          <Link to="/register" className="text-[#1A73E8] font-semibold hover:underline">
+            Create account
           </Link>
         </p>
       </div>

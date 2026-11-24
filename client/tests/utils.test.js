@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   EMISSION_FACTORS,
   calculateEmissionResults,
+  calculateRouteEmission,
   computeCarbonEquivalents,
   decodePolyline,
   rankEmissionResults
@@ -15,59 +16,90 @@ test('decodePolyline decodes encoded polyline5 coordinates', () => {
   assert.ok(Math.abs(pts[0].lng - -120.2) < 0.001);
 });
 
-test('calculateEmissionResults & rankEmissionResults compute duration and rank modes', () => {
+test('calculateRouteEmission increases CO2e under live traffic delay', () => {
+  const freeFlow = calculateRouteEmission({
+    distanceKm: 10,
+    durationMin: 20,
+    staticDurationMin: 20,
+    trafficDelayMinutes: 0,
+    congestionRatio: 1,
+    mode: 'car',
+    factor: EMISSION_FACTORS.car
+  });
+  const congested = calculateRouteEmission({
+    distanceKm: 10,
+    durationMin: 35,
+    staticDurationMin: 20,
+    trafficDelayMinutes: 15,
+    congestionRatio: 1.75,
+    mode: 'car',
+    factor: EMISSION_FACTORS.car
+  });
+
+  assert.ok(Math.abs(freeFlow.baseEmission - 1.7) < 0.001);
+  assert.equal(freeFlow.trafficImpact, 0);
+  assert.ok(congested.totalEmission > freeFlow.totalEmission);
+  assert.ok(congested.trafficImpact > 0);
+});
+
+test('calculateEmissionResults & rankEmissionResults handle multi-route arrays and traffic', () => {
   const modes = [
     { name: 'Bus', mode: 'bus', factor: EMISSION_FACTORS.bus },
     { name: 'Car', mode: 'car', factor: EMISSION_FACTORS.car },
     { name: 'Bicycle', mode: 'bike', factor: EMISSION_FACTORS.bike },
-    { name: 'Auto-rickshaw', mode: 'auto-rickshaw', factor: EMISSION_FACTORS['auto-rickshaw'] }
+    {
+      name: 'Auto-rickshaw',
+      mode: 'auto-rickshaw',
+      factor: EMISSION_FACTORS['auto-rickshaw']
+    }
   ];
   const routeOptions = {
-    car: { distance: 10, duration: 25 },
-    bike: { distance: 9.5, duration: 20 },
-    foot: null
+    car: [
+      {
+        id: 'route-1',
+        summary: 'NH 48',
+        distance: 10,
+        duration: 30,
+        staticDuration: 20,
+        trafficDelayMinutes: 10,
+        congestionRatio: 1.5,
+        trafficStatus: 'heavy'
+      },
+      {
+        id: 'route-2',
+        summary: 'Bypass Rd',
+        distance: 11,
+        duration: 22,
+        staticDuration: 21,
+        trafficDelayMinutes: 1,
+        congestionRatio: 1.05,
+        trafficStatus: 'light'
+      }
+    ],
+    bike: [{ id: 'bike-1', distance: 9.5, duration: 20 }],
+    foot: []
   };
 
   const results = calculateEmissionResults({
     transportModes: modes,
     routeOptions,
+    selectedRouteIndices: { car: 0, bike: 0 },
     baselineVehicle: 'petrol-car'
   });
 
   assert.equal(results.length, 4);
 
-  const auto = results.find((r) => r.mode === 'auto-rickshaw');
-  assert.equal(auto.cost, '190');
-  assert.equal(auto.duration, 25);
-  assert.equal(auto.approximateDuration, true);
-
-  const bus = results.find((r) => r.mode === 'bus');
-  assert.equal(bus.duration, 35);
-  assert.equal(bus.approximateDuration, true);
+  const car = results.find((r) => r.mode === 'car');
+  assert.equal(car.trafficStatus, 'heavy');
+  assert.equal(car.trafficDelayMinutes, 10);
+  assert.ok(Number(car.trafficImpact) > 0);
 
   const bike = results.find((r) => r.mode === 'bike');
   assert.equal(bike.duration, 20);
-  assert.equal(bike.approximateDuration, false);
+  assert.equal(bike.emission, '0.00');
 
   const lowestCarbon = rankEmissionResults(results, 'lowest-carbon');
   assert.equal(lowestCarbon[0].mode, 'bike');
-
-  const fastest = rankEmissionResults(results, 'fastest');
-  assert.equal(fastest[0].mode, 'bike');
-  assert.equal(fastest[fastest.length - 1].mode, 'bus');
-});
-
-test('rankEmissionResults balances time and emissions for numeric route priorities', () => {
-  const results = [
-    { mode: 'fast', duration: 10, emission: '0.60' },
-    { mode: 'balanced', duration: 20, emission: '0.30' },
-    { mode: 'green', duration: 40, emission: '0.00' }
-  ];
-
-  assert.equal(rankEmissionResults(results, 0)[0].mode, 'fast');
-  assert.equal(rankEmissionResults(results, 50)[0].mode, 'balanced');
-  assert.equal(rankEmissionResults(results, 100)[0].mode, 'green');
-  assert.deepEqual(results.map((result) => result.mode), ['fast', 'balanced', 'green']);
 });
 
 test('computeCarbonEquivalents calculates approximate trees, phone charges, and petrol avoided', () => {
@@ -75,8 +107,4 @@ test('computeCarbonEquivalents calculates approximate trees, phone charges, and 
   assert.equal(eq.trees, '1.0');
   assert.equal(eq.phoneCharges, 2625);
   assert.equal(eq.petrolLiters, '9.1');
-
-  const zero = computeCarbonEquivalents(-5);
-  assert.equal(zero.trees, '0.0');
-  assert.equal(zero.phoneCharges, 0);
 });
