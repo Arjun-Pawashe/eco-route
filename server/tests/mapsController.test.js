@@ -114,38 +114,114 @@ test('getRoutes returns 400 when coordinates are missing', async () => {
   assert.equal(res.body.success, false);
 });
 
-test('getRoutes returns multiple alternative routes with live traffic data', async () => {
+test('getRoutes returns road alternatives and only matching transit services', async () => {
   const prevKey = process.env.GOOGLE_MAPS_API_KEY;
   const prevFetch = global.fetch;
   process.env.GOOGLE_MAPS_API_KEY = 'test-google-key';
-  global.fetch = async () => ({
-    ok: true,
-    json: async () => ({
-      routes: [
-        {
-          description: 'NH 48',
-          routeLabels: ['DEFAULT_ROUTE'],
-          distanceMeters: 12500,
-          duration: '1800s',
-          staticDuration: '1200s',
-          polyline: { encodedPolyline: '_p~iF~ps|U_ulLnnqC' },
-          travelAdvisory: {
-            speedReadingIntervals: [
-              { startPolylinePointIndex: 0, endPolylinePointIndex: 1, speed: 'SLOW' }
+  const transitRequests = [];
+  global.fetch = async (_, options) => {
+    const request = JSON.parse(options.body);
+    if (request.travelMode === 'TRANSIT') {
+      const allowedMode = request.transitPreferences.allowedTravelModes[0];
+      transitRequests.push({
+        allowedMode,
+        fieldMask: options.headers['X-Goog-FieldMask']
+      });
+
+      const transitData = {
+        BUS: {
+          vehicleType: 'BUS',
+          agency: 'Pune Mahanagar Parivahan Mahamandal Limited (PMPML)',
+          lineName: '42'
+        },
+        SUBWAY: {
+          vehicleType: 'METRO_RAIL',
+          agency: 'Maha Metro',
+          lineName: 'Aqua Line'
+        },
+        TRAIN: {
+          vehicleType: 'COMMUTER_TRAIN',
+          agency: 'Indian Railways',
+          lineName: 'Pune Local'
+        }
+      }[allowedMode];
+      const buildTransitRoute = (vehicleType, lineName, agency) => ({
+        description: lineName,
+        distanceMeters: 9000,
+        duration: '2400s',
+        polyline: { encodedPolyline: '_p~iF~ps|U_ulLnnqC' },
+        legs: [
+          {
+            steps: [
+              {
+                distanceMeters: 8000,
+                transitDetails: {
+                  transitLine: {
+                    name: lineName,
+                    nameShort: lineName,
+                    vehicle: { type: vehicleType },
+                    agencies: [{ name: agency }]
+                  },
+                  stopDetails: {
+                    departureStop: { name: 'Origin Stop' },
+                    arrivalStop: { name: 'Destination Stop' }
+                  }
+                }
+              }
             ]
           }
-        },
-        {
-          description: 'Baner Rd',
-          routeLabels: ['FUEL_EFFICIENT'],
-          distanceMeters: 13200,
-          duration: '1500s',
-          staticDuration: '1380s',
-          polyline: { encodedPolyline: '_p~iF~ps|U_ulLnnqC' }
-        }
-      ]
-    })
-  });
+        ]
+      });
+      const unsupportedVehicleType = {
+        BUS: 'METRO_RAIL',
+        SUBWAY: 'BUS',
+        TRAIN: 'BUS'
+      }[allowedMode];
+
+      return {
+        ok: true,
+        json: async () => ({
+          routes: [
+            buildTransitRoute(
+              transitData.vehicleType,
+              transitData.lineName,
+              transitData.agency
+            ),
+            buildTransitRoute(unsupportedVehicleType, 'Other Line', 'Other Agency')
+          ]
+        })
+      };
+    }
+
+    return {
+      ok: true,
+      json: async () => ({
+        routes: [
+          {
+            description: 'NH 48',
+            routeLabels: ['DEFAULT_ROUTE'],
+            distanceMeters: 12500,
+            duration: '1800s',
+            staticDuration: '1200s',
+            polyline: { encodedPolyline: '_p~iF~ps|U_ulLnnqC' },
+            travelAdvisory: {
+              speedReadingIntervals: [
+                { startPolylinePointIndex: 0, endPolylinePointIndex: 1, speed: 'SLOW' }
+              ]
+            }
+          },
+          {
+            description: 'Baner Rd',
+            routeLabels: ['FUEL_EFFICIENT'],
+            distanceMeters: 13200,
+            duration: '1500s',
+            staticDuration: '1380s',
+            polyline: { encodedPolyline: '_p~iF~ps|U_ulLnnqC' }
+          }
+        ]
+      })
+    };
+  };
 
   try {
     const res = mockRes();
@@ -170,6 +246,25 @@ test('getRoutes returns multiple alternative routes with live traffic data', asy
     assert.equal(res.body.routes.car[0].trafficStatus, 'heavy');
     assert.equal(res.body.routes.car[1].summary, 'Baner Rd');
     assert.equal(res.body.routes.car[1].trafficStatus, 'light');
+    assert.equal(res.body.routes.bus.length, 1);
+    assert.equal(res.body.routes.metro.length, 1);
+    assert.equal(res.body.routes.train.length, 1);
+    assert.equal(res.body.routes.bus[0].transitDistance, 8);
+    assert.match(res.body.routes.bus[0].transitSummary, /PMPML.*42/);
+    assert.equal(res.body.routes.metro[0].transitSegments[0].vehicleType, 'METRO_RAIL');
+    assert.match(res.body.routes.metro[0].transitAgencies[0], /Maha Metro/);
+    assert.equal(res.body.routes.train[0].transitSegments[0].vehicleType, 'COMMUTER_TRAIN');
+    assert.deepEqual(
+      transitRequests.map((request) => request.allowedMode).sort(),
+      ['BUS', 'SUBWAY', 'TRAIN']
+    );
+    assert.ok(
+      transitRequests.every((request) =>
+        request.fieldMask.includes(
+          'routes.legs.steps.transitDetails.transitLine.vehicle.type'
+        )
+      )
+    );
   } finally {
     global.fetch = prevFetch;
     if (prevKey === undefined) delete process.env.GOOGLE_MAPS_API_KEY;

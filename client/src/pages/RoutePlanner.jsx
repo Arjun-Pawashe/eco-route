@@ -22,6 +22,7 @@ import {
   calculateEmissionResults,
   calculateRouteEmission,
   decodePolyline,
+  getAvailableTransportModes,
   rankEmissionResults
 } from '../utils/carbonCalculator';
 import MapView from '../components/MapView';
@@ -57,8 +58,9 @@ const TRANSPORT_MODES = [
     icon: Car,
     factor: EMISSION_FACTORS['auto-rickshaw']
   },
-  { name: 'Bus', mode: 'bus', routeKey: 'transit', icon: Bus, factor: EMISSION_FACTORS.bus },
-  { name: 'Train', mode: 'train', routeKey: 'transit', icon: Train, factor: EMISSION_FACTORS.train },
+  { name: 'Bus', mode: 'bus', routeKey: 'bus', icon: Bus, factor: EMISSION_FACTORS.bus },
+  { name: 'Metro', mode: 'metro', routeKey: 'metro', icon: Train, factor: EMISSION_FACTORS.metro },
+  { name: 'Train', mode: 'train', routeKey: 'train', icon: Train, factor: EMISSION_FACTORS.train },
   { name: 'Bicycle', mode: 'bike', routeKey: 'bike', icon: Bike, factor: EMISSION_FACTORS.bike },
   {
     name: 'Walking',
@@ -103,7 +105,9 @@ function RoutePlanner() {
   const [routeOptions, setRouteOptions] = useState({
     car: [],
     twoWheeler: [],
-    transit: [],
+    bus: [],
+    metro: [],
+    train: [],
     bike: [],
     foot: []
   });
@@ -111,7 +115,9 @@ function RoutePlanner() {
   const [selectedRouteIndices, setSelectedRouteIndices] = useState({
     car: 0,
     twoWheeler: 0,
-    transit: 0,
+    bus: 0,
+    metro: 0,
+    train: 0,
     bike: 0,
     foot: 0
   });
@@ -132,17 +138,22 @@ function RoutePlanner() {
       setRouteOptions({
         car: [],
         twoWheeler: [],
-        transit: [],
+        bus: [],
+        metro: [],
+        train: [],
         bike: [],
         foot: []
       });
       setSelectedRouteIndices({
         car: 0,
         twoWheeler: 0,
-        transit: 0,
+        bus: 0,
+        metro: 0,
+        train: 0,
         bike: 0,
         foot: 0
       });
+      setRouteLoading(false);
       setSavedModes({});
       return;
     }
@@ -153,6 +164,24 @@ function RoutePlanner() {
       setRouteLoading(true);
       setRouteError('');
       setSavedModes({});
+      setRouteOptions({
+        car: [],
+        twoWheeler: [],
+        bus: [],
+        metro: [],
+        train: [],
+        bike: [],
+        foot: []
+      });
+      setSelectedRouteIndices({
+        car: 0,
+        twoWheeler: 0,
+        bus: 0,
+        metro: 0,
+        train: 0,
+        bike: 0,
+        foot: 0
+      });
 
       try {
         const response = await API.post(
@@ -168,29 +197,28 @@ function RoutePlanner() {
             coordinates: decodePolyline(r.geometry)
           }));
 
-        setRouteOptions({
+        const parsedRoutes = {
           car: decodeList(rawRoutes.car),
           twoWheeler: decodeList(rawRoutes.twoWheeler),
-          transit: decodeList(rawRoutes.transit),
+          bus: decodeList(rawRoutes.bus),
+          metro: decodeList(rawRoutes.metro),
+          train: decodeList(rawRoutes.train),
           bike: decodeList(rawRoutes.bike),
           foot: decodeList(rawRoutes.foot)
-        });
+        };
+        setRouteOptions(parsedRoutes);
         setSelectedRouteIndices({
           car: 0,
           twoWheeler: 0,
-          transit: 0,
+          bus: 0,
+          metro: 0,
+          train: 0,
           bike: 0,
           foot: 0
         });
 
         const failedModes = response.data?.failedModes || [];
-        if (
-          failedModes.length > 0 &&
-          decodeList(rawRoutes.car).length === 0 &&
-          decodeList(rawRoutes.transit).length === 0 &&
-          decodeList(rawRoutes.bike).length === 0 &&
-          decodeList(rawRoutes.foot).length === 0
-        ) {
+        if (failedModes.length > 0 && Object.values(parsedRoutes).every((routes) => routes.length === 0)) {
           setRouteError(
             'Could not calculate routes for the selected locations. Verify GOOGLE_MAPS_API_KEY and Routes API.'
           );
@@ -213,34 +241,55 @@ function RoutePlanner() {
     return () => controller.abort();
   }, [origin, destination]);
 
+  const availableTransportModes = useMemo(() => {
+    return getAvailableTransportModes(TRANSPORT_MODES, routeOptions).map(
+      (mode) => {
+        const routes = routeOptions[mode.routeKey] || [];
+        const providerText = routes
+          .flatMap((route) => [
+            ...(route.transitAgencies || []),
+            ...(route.transitSegments || []).map((segment) => segment.lineName)
+          ])
+          .join(' ');
+
+        if (
+          mode.mode === 'bus' &&
+          /PMPML|Pune Mahanagar Parivahan/i.test(providerText)
+        ) {
+          return { ...mode, name: 'PMPML Bus' };
+        }
+        if (
+          mode.mode === 'metro' &&
+          /Pune\s*Metro|Maha(?:rashtra)?[\s-]*Metro/i.test(providerText)
+        ) {
+          return { ...mode, name: 'Pune Metro' };
+        }
+        return mode;
+      }
+    );
+  }, [routeOptions]);
+
   const activeModeConfig =
-    TRANSPORT_MODES.find((m) => m.mode === selectedMode) || TRANSPORT_MODES[0];
+    availableTransportModes.find((m) => m.mode === selectedMode) ||
+    availableTransportModes[0] ||
+    TRANSPORT_MODES[0];
   const activeRouteKey = activeModeConfig.routeKey;
 
   const activeRoutes = useMemo(() => {
-    const list = routeOptions[activeRouteKey] || [];
-    if (list.length > 0) return list;
-    // Fallback to car routes for road-based modes if mode-specific route wasn't returned
-    if (
-      activeModeConfig.mode === 'two-wheeler' ||
-      activeModeConfig.mode === 'ev-scooter' ||
-      activeModeConfig.mode === 'bus' ||
-      activeModeConfig.mode === 'train'
-    ) {
-      return routeOptions.car || [];
-    }
-    return [];
-  }, [routeOptions, activeRouteKey, activeModeConfig.mode]);
+    return routeOptions[activeRouteKey] || [];
+  }, [routeOptions, activeRouteKey]);
 
-  const effectiveRouteKey =
-    (routeOptions[activeRouteKey] || []).length > 0 ? activeRouteKey : 'car';
-  const selectedRouteIndex = selectedRouteIndices[effectiveRouteKey] ?? 0;
+  const selectedRouteIndex = selectedRouteIndices[activeRouteKey] ?? 0;
 
   // Compute live-traffic emission for each alternative route in the active mode
   const activeRoutesWithEmissions = useMemo(() => {
     return activeRoutes.map((route) => {
       const emissionStats = calculateRouteEmission({
-        distanceKm: route.distance,
+        distanceKm:
+          ['bus', 'metro', 'train'].includes(activeModeConfig.mode) &&
+          route.transitDistance != null
+            ? route.transitDistance
+            : route.distance,
         durationMin: route.duration,
         staticDurationMin: route.staticDuration,
         trafficDelayMinutes: route.trafficDelayMinutes,
@@ -274,12 +323,12 @@ function RoutePlanner() {
   const emissionResults = useMemo(
     () =>
       calculateEmissionResults({
-        transportModes: TRANSPORT_MODES,
+        transportModes: availableTransportModes,
         routeOptions,
         selectedRouteIndices,
         baselineVehicle
       }),
-    [routeOptions, selectedRouteIndices, baselineVehicle]
+    [availableTransportModes, routeOptions, selectedRouteIndices, baselineVehicle]
   );
 
   const rankedResults = useMemo(
@@ -351,7 +400,7 @@ function RoutePlanner() {
   function handleSelectRouteIndex(idx) {
     setSelectedRouteIndices((prev) => ({
       ...prev,
-      [effectiveRouteKey]: idx
+      [activeRouteKey]: idx
     }));
   }
 
@@ -395,9 +444,9 @@ function RoutePlanner() {
           {/* Travel Mode Strip */}
           <div className="p-4 border-b border-[#E8EAED]">
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-              {TRANSPORT_MODES.map((m) => {
+              {availableTransportModes.map((m) => {
                 const Icon = m.icon;
-                const isSelected = selectedMode === m.mode;
+                const isSelected = activeModeConfig.mode === m.mode;
                 return (
                   <button
                     key={m.mode}
@@ -667,6 +716,11 @@ function RoutePlanner() {
                           <p className="text-xs text-[#5F6368] mt-1">
                             via <span className="font-medium text-[#3C4043]">{route.summary}</span>
                           </p>
+                          {route.transitSummary && (
+                            <p className="text-xs text-[#5F6368] mt-1">
+                              {route.transitSummary}
+                            </p>
+                          )}
                         </div>
 
                         <div className="text-right shrink-0">
@@ -777,6 +831,11 @@ function RoutePlanner() {
                             <p className="text-xs text-[#5F6368]">
                               {item.distance} km · {item.duration ?? '—'} min
                             </p>
+                            {item.transitSummary && (
+                              <p className="text-xs text-[#5F6368] mt-0.5">
+                                {item.transitSummary}
+                              </p>
+                            )}
                           </div>
                         </div>
 

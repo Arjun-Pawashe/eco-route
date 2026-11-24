@@ -1,11 +1,11 @@
 # EcoRoute Server
 
-Express backend for **Google Maps Platform** APIs (Places API New & Routes API v2 with live traffic) and **MongoDB** persistence, with authentication handled by **Firebase Auth** on the frontend and verified on the backend via Firebase ID tokens (`firebase-admin`).
+Express backend for **Google Maps Platform** APIs (Places API New & Routes API v2 for traffic-aware road routes and available transit itineraries) and **MongoDB** persistence, with authentication handled by **Firebase Auth** on the frontend and verified on the backend via Firebase ID tokens (`firebase-admin`).
 
 ## Endpoints
 
 - `GET /api/health` — Health check
-- `GET /api/maps/config`, `GET /api/maps/search`, `POST /api/maps/routes` — Google Maps proxy (live traffic & alternative routes)
+- `GET /api/maps/config`, `GET /api/maps/search`, `POST /api/maps/routes` — Google Maps proxy (traffic-aware alternatives and matching bus, metro, or train services when available)
 - `GET/POST /api/users/profile`, `PUT /api/users/preferences`, `PUT /api/users/saved-places` — User profile & preferences (Firebase Bearer token required)
 - `GET/POST /api/journeys`, `DELETE /api/journeys/:id` — Journey history (Firebase Bearer token required)
 - `GET /api/dashboard/stats` — Dashboard metrics, charts, and green streak (Firebase Bearer token required)

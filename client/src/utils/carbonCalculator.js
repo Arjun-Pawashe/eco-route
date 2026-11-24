@@ -1,6 +1,7 @@
 export const EMISSION_FACTORS = {
   bus: 0.08,
   train: 0.04,
+  metro: 0.04,
   car: 0.17,
   'two-wheeler': 0.05,
   'auto-rickshaw': 0.09,
@@ -21,6 +22,7 @@ export const BASELINE_FACTORS = {
 export const COST_FACTORS = {
   bus: 1.5,
   train: 0.8,
+  metro: 0.8,
   car: 10 / 15,
   'two-wheeler': 10 / 45,
   'auto-rickshaw': 12,
@@ -38,6 +40,7 @@ const TRAFFIC_SENSITIVITY = {
   bus: { congestionPenaltyRate: 0.25, idleKgPerHour: 0.35 },
   'ev-car': { congestionPenaltyRate: 0.05, idleKgPerHour: 0.15 },
   'ev-scooter': { congestionPenaltyRate: 0.04, idleKgPerHour: 0.03 },
+  metro: { congestionPenaltyRate: 0, idleKgPerHour: 0 },
   train: { congestionPenaltyRate: 0, idleKgPerHour: 0 },
   bike: { congestionPenaltyRate: 0, idleKgPerHour: 0 },
   walking: { congestionPenaltyRate: 0, idleKgPerHour: 0 }
@@ -166,6 +169,43 @@ function getRouteArray(routeOptions, key) {
   return [];
 }
 
+function getModeRouteKey(mode) {
+  if (mode.routeKey) return mode.routeKey;
+  if (mode.mode === 'two-wheeler' || mode.mode === 'ev-scooter') {
+    return 'twoWheeler';
+  }
+  if (mode.mode === 'walking') return 'foot';
+  return mode.mode;
+}
+
+export function getAvailableTransportModes(transportModes, routeOptions) {
+  return transportModes.filter(
+    (mode) => getRouteArray(routeOptions, getModeRouteKey(mode)).length > 0
+  );
+}
+
+function getTransitDisplayName(mode, route) {
+  const agencies = route.transitAgencies || [];
+  const lineNames = (route.transitSegments || []).map(
+    (segment) => segment.lineName
+  );
+  const providerText = [...agencies, ...lineNames].join(' ');
+
+  if (
+    mode.mode === 'bus' &&
+    /PMPML|Pune Mahanagar Parivahan/i.test(providerText)
+  ) {
+    return 'PMPML Bus';
+  }
+  if (
+    mode.mode === 'metro' &&
+    /Pune\s*Metro|Maha(?:rashtra)?[\s-]*Metro/i.test(providerText)
+  ) {
+    return 'Pune Metro';
+  }
+  return mode.name;
+}
+
 export function calculateEmissionResults({
   transportModes,
   routeOptions,
@@ -173,88 +213,48 @@ export function calculateEmissionResults({
   baselineVehicle = 'petrol-car'
 }) {
   const carRoutes = getRouteArray(routeOptions, 'car');
-  if (carRoutes.length === 0) return [];
-
+  const routeForMode = (mode) => {
+    const routeKey = getModeRouteKey(mode);
+    const routes = getRouteArray(routeOptions, routeKey);
+    return routes[selectedRouteIndices[routeKey] ?? 0] || routes[0] || null;
+  };
   const carRoute =
-    carRoutes[selectedRouteIndices.car ?? 0] || carRoutes[0];
-  const twoWheelerRoutes = getRouteArray(routeOptions, 'twoWheeler');
-  const twoWheelerRoute =
-    twoWheelerRoutes[selectedRouteIndices.twoWheeler ?? 0] ||
-    twoWheelerRoutes[0] ||
-    carRoute;
-  const transitRoutes = getRouteArray(routeOptions, 'transit');
-  const transitRoute =
-    transitRoutes[selectedRouteIndices.transit ?? 0] || transitRoutes[0];
-  const bikeRoutes = getRouteArray(routeOptions, 'bike');
-  const bikeRoute =
-    bikeRoutes[selectedRouteIndices.bike ?? 0] || bikeRoutes[0];
-  const footRoutes = getRouteArray(routeOptions, 'foot');
-  const footRoute =
-    footRoutes[selectedRouteIndices.foot ?? 0] || footRoutes[0];
-
-  const baselineStats = calculateRouteEmission({
-    distanceKm: carRoute.distance,
-    durationMin: carRoute.duration,
-    staticDurationMin: carRoute.staticDuration,
-    trafficDelayMinutes: carRoute.trafficDelayMinutes,
-    congestionRatio: carRoute.congestionRatio,
-    mode:
-      baselineVehicle === 'ev-car'
-        ? 'ev-car'
-        : baselineVehicle === 'petrol-two-wheeler'
-          ? 'two-wheeler'
-          : baselineVehicle === 'auto-rickshaw'
-            ? 'auto-rickshaw'
-            : 'car',
-    factor: BASELINE_FACTORS[baselineVehicle] ?? 0.17
-  });
+    carRoutes[selectedRouteIndices.car ?? 0] || carRoutes[0] || null;
+  const baselineStats = carRoute
+    ? calculateRouteEmission({
+        distanceKm: carRoute.distance,
+        durationMin: carRoute.duration,
+        staticDurationMin: carRoute.staticDuration,
+        trafficDelayMinutes: carRoute.trafficDelayMinutes,
+        congestionRatio: carRoute.congestionRatio,
+        mode:
+          baselineVehicle === 'ev-car'
+            ? 'ev-car'
+            : baselineVehicle === 'petrol-two-wheeler'
+              ? 'two-wheeler'
+              : baselineVehicle === 'auto-rickshaw'
+                ? 'auto-rickshaw'
+                : 'car',
+        factor: BASELINE_FACTORS[baselineVehicle] ?? 0.17
+      })
+    : null;
 
   return transportModes
     .map((mode) => {
-      let activeRoute = null;
-      let approximateDistance = false;
-      let approximateDuration = false;
-
-      if (mode.mode === 'car' || mode.mode === 'ev-car') {
-        activeRoute = carRoute;
-      } else if (mode.mode === 'two-wheeler' || mode.mode === 'ev-scooter') {
-        activeRoute = twoWheelerRoute;
-        approximateDistance = twoWheelerRoutes.length === 0;
-        approximateDuration = twoWheelerRoutes.length === 0;
-      } else if (mode.mode === 'auto-rickshaw') {
-        activeRoute = carRoute;
-        approximateDistance = true;
-        approximateDuration = true;
-      } else if (mode.mode === 'bike') {
-        if (!bikeRoute) return null;
-        activeRoute = bikeRoute;
-      } else if (mode.mode === 'walking') {
-        if (!footRoute) return null;
-        activeRoute = footRoute;
-      } else if (mode.mode === 'bus' || mode.mode === 'train') {
-        if (transitRoute) {
-          activeRoute = transitRoute;
-        } else {
-          activeRoute = {
-            ...carRoute,
-            duration:
-              carRoute.duration != null
-                ? Math.round(carRoute.duration * 1.35)
-                : null
-          };
-          approximateDistance = true;
-          approximateDuration = true;
-        }
-      }
-
+      const activeRoute = routeForMode(mode);
       if (!activeRoute) return null;
 
       const distance = Number(activeRoute.distance || 0);
+      const isTransit = ['bus', 'metro', 'train'].includes(mode.mode);
+      const emissionDistance =
+        isTransit && activeRoute.transitDistance != null
+          ? Number(activeRoute.transitDistance)
+          : distance;
       const duration =
         activeRoute.duration != null ? Number(activeRoute.duration) : null;
 
       const emissionStats = calculateRouteEmission({
-        distanceKm: distance,
+        distanceKm: emissionDistance,
         durationMin: duration,
         staticDurationMin: activeRoute.staticDuration,
         trafficDelayMinutes: activeRoute.trafficDelayMinutes,
@@ -266,32 +266,37 @@ export function calculateEmissionResults({
       const cost =
         mode.mode === 'auto-rickshaw'
           ? 30 + distance * 16
-          : distance * (COST_FACTORS[mode.mode] ?? 0);
+          : (isTransit ? emissionDistance : distance) *
+            (COST_FACTORS[mode.mode] ?? 0);
 
-      const baselineCost =
-        mode.mode === 'car'
+      const baselineCost = carRoute
+        ? mode.mode === 'car'
           ? (carRoute.distance * 10) / 15
           : carRoute.distance *
-            (BASELINE_FACTORS[baselineVehicle] === 0.05 ? 10 / 45 : 10 / 15);
+            (BASELINE_FACTORS[baselineVehicle] === 0.05 ? 10 / 45 : 10 / 15)
+        : cost;
 
       return {
         ...mode,
+        name: isTransit ? getTransitDisplayName(mode, activeRoute) : mode.name,
         factor: mode.factor ?? EMISSION_FACTORS[mode.mode] ?? 0,
         distance: distance.toFixed(2),
+        emissionDistance: emissionDistance.toFixed(2),
         duration,
         staticDuration: activeRoute.staticDuration ?? duration,
         trafficDelayMinutes: emissionStats.trafficDelayMinutes,
         congestionRatio: emissionStats.congestionRatio,
         trafficStatus: activeRoute.trafficStatus || 'light',
         routeSummary: activeRoute.summary || '',
-        approximateDistance,
-        approximateDuration,
+        transitSummary: activeRoute.transitSummary || '',
+        approximateDistance: mode.mode === 'auto-rickshaw',
+        approximateDuration: mode.mode === 'auto-rickshaw',
         baseEmission: emissionStats.baseEmission.toFixed(2),
         trafficImpact: emissionStats.trafficImpact.toFixed(2),
         emission: emissionStats.totalEmission.toFixed(2),
-        carbonSaved: (
-          baselineStats.totalEmission - emissionStats.totalEmission
-        ).toFixed(2),
+        carbonSaved: baselineStats
+          ? (baselineStats.totalEmission - emissionStats.totalEmission).toFixed(2)
+          : '0.00',
         cost: cost.toFixed(0),
         costSaved: Math.max(0, baselineCost - cost).toFixed(0)
       };

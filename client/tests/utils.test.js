@@ -6,6 +6,7 @@ import {
   calculateRouteEmission,
   computeCarbonEquivalents,
   decodePolyline,
+  getAvailableTransportModes,
   rankEmissionResults
 } from '../src/utils/carbonCalculator.js';
 
@@ -44,12 +45,13 @@ test('calculateRouteEmission increases CO2e under live traffic delay', () => {
 
 test('calculateEmissionResults & rankEmissionResults handle multi-route arrays and traffic', () => {
   const modes = [
-    { name: 'Bus', mode: 'bus', factor: EMISSION_FACTORS.bus },
-    { name: 'Car', mode: 'car', factor: EMISSION_FACTORS.car },
-    { name: 'Bicycle', mode: 'bike', factor: EMISSION_FACTORS.bike },
+    { name: 'Bus', mode: 'bus', routeKey: 'bus', factor: EMISSION_FACTORS.bus },
+    { name: 'Car', mode: 'car', routeKey: 'car', factor: EMISSION_FACTORS.car },
+    { name: 'Bicycle', mode: 'bike', routeKey: 'bike', factor: EMISSION_FACTORS.bike },
     {
       name: 'Auto-rickshaw',
       mode: 'auto-rickshaw',
+      routeKey: 'car',
       factor: EMISSION_FACTORS['auto-rickshaw']
     }
   ];
@@ -76,6 +78,19 @@ test('calculateEmissionResults & rankEmissionResults handle multi-route arrays a
         trafficStatus: 'light'
       }
     ],
+    bus: [
+      {
+        id: 'pmpml-1',
+        distance: 11,
+        duration: 35,
+        transitDistance: 9,
+        transitAgencies: [
+          'Pune Mahanagar Parivahan Mahamandal Limited (PMPML)'
+        ],
+        transitSegments: [{ lineName: '42' }],
+        transitSummary: 'PMPML · 42'
+      }
+    ],
     bike: [{ id: 'bike-1', distance: 9.5, duration: 20 }],
     foot: []
   };
@@ -98,8 +113,48 @@ test('calculateEmissionResults & rankEmissionResults handle multi-route arrays a
   assert.equal(bike.duration, 20);
   assert.equal(bike.emission, '0.00');
 
+  const bus = results.find((r) => r.mode === 'bus');
+  assert.equal(bus.name, 'PMPML Bus');
+  assert.equal(bus.transitSummary, 'PMPML · 42');
+  assert.equal(bus.emission, '0.72');
+
   const lowestCarbon = rankEmissionResults(results, 'lowest-carbon');
   assert.equal(lowestCarbon[0].mode, 'bike');
+});
+
+test('only returns transit suggestions when Google provides matching routes', () => {
+  const modes = [
+    { name: 'Bus', mode: 'bus', routeKey: 'bus', factor: EMISSION_FACTORS.bus },
+    { name: 'Metro', mode: 'metro', routeKey: 'metro', factor: EMISSION_FACTORS.metro },
+    { name: 'Train', mode: 'train', routeKey: 'train', factor: EMISSION_FACTORS.train }
+  ];
+  const routeOptions = {
+    car: [],
+    bus: [],
+    metro: [
+      {
+        distance: 8,
+        duration: 25,
+        transitDistance: 7.5,
+        transitAgencies: ['Maha Metro'],
+        transitSegments: [{ lineName: 'Pune Metro Aqua Line' }],
+        transitSummary: 'Maha Metro · Aqua Line'
+      }
+    ],
+    train: []
+  };
+
+  const availableModes = getAvailableTransportModes(modes, routeOptions);
+  assert.deepEqual(availableModes.map((mode) => mode.mode), ['metro']);
+
+  const results = calculateEmissionResults({
+    transportModes: modes,
+    routeOptions
+  });
+  assert.equal(results.length, 1);
+  assert.equal(results[0].name, 'Pune Metro');
+  assert.equal(results[0].emission, '0.30');
+  assert.equal(results[0].carbonSaved, '0.00');
 });
 
 test('computeCarbonEquivalents calculates approximate trees, phone charges, and petrol avoided', () => {

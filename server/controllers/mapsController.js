@@ -32,7 +32,44 @@ function classifyTraffic(congestionRatio) {
     return 'light';
 }
 
+function getTransitSegments(route) {
+    return (route.legs || [])
+        .flatMap((leg) => leg.steps || [])
+        .filter((step) => step.transitDetails?.transitLine)
+        .map((step) => {
+            const details = step.transitDetails;
+            const line = details.transitLine;
+            const stops = details.stopDetails || {};
+
+            return {
+                vehicleType: line.vehicle?.type || '',
+                lineName: line.nameShort || line.name || '',
+                agencyNames: (line.agencies || [])
+                    .map((agency) => agency.name)
+                    .filter(Boolean),
+                departureStop: stops.departureStop?.name || '',
+                arrivalStop: stops.arrivalStop?.name || '',
+                distance: Number(
+                    ((step.distanceMeters || 0) / 1000).toFixed(2)
+                )
+            };
+        });
+}
+
 function normalizeRoute(route, index) {
+    const transitSegments = getTransitSegments(route);
+    const transitAgencies = [
+        ...new Set(transitSegments.flatMap((segment) => segment.agencyNames))
+    ];
+    const transitSummary = [
+        ...new Set(
+            transitSegments.map((segment) =>
+                [segment.agencyNames.join(', '), segment.lineName]
+                    .filter(Boolean)
+                    .join(' · ')
+            )
+        )
+    ].join(' → ');
     const distanceKm = Number(((route.distanceMeters || 0) / 1000).toFixed(2));
     const durationSeconds = parseDurationSeconds(route.duration);
     const staticDurationSeconds =
@@ -48,6 +85,11 @@ function normalizeRoute(route, index) {
         staticDurationSeconds > 0
             ? Number((durationSeconds / staticDurationSeconds).toFixed(3))
             : 1;
+    const transitDistance = Number(
+        transitSegments
+            .reduce((total, segment) => total + segment.distance, 0)
+            .toFixed(2)
+    );
 
     return {
         id: `route-${index + 1}`,
@@ -62,6 +104,10 @@ function normalizeRoute(route, index) {
         trafficDelayMinutes,
         congestionRatio,
         trafficStatus: classifyTraffic(congestionRatio),
+        transitSegments,
+        transitAgencies,
+        transitSummary,
+        transitDistance: transitDistance > 0 ? transitDistance : null,
         speedReadingIntervals: Array.isArray(
             route.travelAdvisory?.speedReadingIntervals
         )
@@ -176,16 +222,46 @@ const getRoutes = async (req, res) => {
         const profiles = [
             { key: 'car', travelMode: 'DRIVE', supportsTraffic: true },
             { key: 'twoWheeler', travelMode: 'TWO_WHEELER', supportsTraffic: true },
-            { key: 'transit', travelMode: 'TRANSIT', supportsTraffic: false },
+            {
+                key: 'bus',
+                travelMode: 'TRANSIT',
+                allowedTransitModes: ['BUS']
+            },
+            {
+                key: 'metro',
+                travelMode: 'TRANSIT',
+                allowedTransitModes: ['SUBWAY', 'LIGHT_RAIL']
+            },
+            {
+                key: 'train',
+                travelMode: 'TRANSIT',
+                allowedTransitModes: ['TRAIN']
+            },
             { key: 'bike', travelMode: 'BICYCLE', supportsTraffic: false },
             { key: 'foot', travelMode: 'WALK', supportsTraffic: false }
         ];
 
+        const transitVehicleTypes = {
+            bus: new Set(['BUS', 'INTERCITY_BUS', 'TROLLEYBUS']),
+            metro: new Set(['METRO_RAIL', 'SUBWAY', 'MONORAIL', 'TRAM']),
+            train: new Set([
+                'COMMUTER_TRAIN',
+                'HIGH_SPEED_TRAIN',
+                'LONG_DISTANCE_TRAIN',
+                'RAIL',
+                'HEAVY_RAIL'
+            ])
+        };
         const results = {};
         const failedModes = [];
 
         await Promise.all(
-            profiles.map(async ({ key, travelMode, supportsTraffic }) => {
+            profiles.map(async ({
+                key,
+                travelMode,
+                supportsTraffic,
+                allowedTransitModes
+            }) => {
                 try {
                     const requestBody = {
                         origin: {
@@ -210,6 +286,12 @@ const getRoutes = async (req, res) => {
                         units: 'METRIC'
                     };
 
+                    if (allowedTransitModes) {
+                        requestBody.transitPreferences = {
+                            allowedTravelModes: allowedTransitModes
+                        };
+                    }
+
                     if (supportsTraffic) {
                         requestBody.routingPreference = 'TRAFFIC_AWARE';
                         requestBody.extraComputations = ['TRAFFIC_ON_POLYLINE'];
@@ -225,6 +307,17 @@ const getRoutes = async (req, res) => {
                     ];
                     if (supportsTraffic) {
                         fieldMask.push('routes.travelAdvisory.speedReadingIntervals');
+                    }
+                    if (allowedTransitModes) {
+                        fieldMask.push(
+                            'routes.legs.steps.distanceMeters',
+                            'routes.legs.steps.transitDetails.transitLine.name',
+                            'routes.legs.steps.transitDetails.transitLine.nameShort',
+                            'routes.legs.steps.transitDetails.transitLine.vehicle.type',
+                            'routes.legs.steps.transitDetails.transitLine.agencies.name',
+                            'routes.legs.steps.transitDetails.stopDetails.departureStop.name',
+                            'routes.legs.steps.transitDetails.stopDetails.arrivalStop.name'
+                        );
                     }
 
                     const response = await fetch(ROUTES_COMPUTE_URL, {
@@ -244,9 +337,23 @@ const getRoutes = async (req, res) => {
                         throw new Error(data?.error?.message || 'No route found');
                     }
 
-                    results[key] = rawRoutes.map((route, idx) =>
+                    const normalizedRoutes = rawRoutes.map((route, idx) =>
                         normalizeRoute(route, idx)
                     );
+                    results[key] = allowedTransitModes
+                        ? normalizedRoutes.filter(
+                              (route) =>
+                                  route.transitSegments.length > 0 &&
+                                  route.transitSegments.every((segment) =>
+                                      transitVehicleTypes[key].has(
+                                          segment.vehicleType
+                                      )
+                                  )
+                          )
+                        : normalizedRoutes;
+                    if (results[key].length === 0) {
+                        throw new Error('No matching transit route found');
+                    }
                 } catch {
                     results[key] = [];
                     failedModes.push(key);

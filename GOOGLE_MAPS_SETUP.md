@@ -13,7 +13,7 @@ Follow these steps to configure Google Maps Platform for both the frontend (`cli
 In **APIs & Services -> Library**, search for and enable these three APIs:
 
 1. **Maps JavaScript API** — Renders the interactive Google Map and live Traffic Layer in `client/`.
-2. **Routes API** — Computes multiple alternative routes with real-time `TRAFFIC_AWARE` durations and `staticDuration` in `server/`.
+2. **Routes API** — Computes road alternatives and transit itineraries in `server/`. PMPML bus, Pune Metro, and train suggestions appear only when Google returns a matching service for the selected trip.
 3. **Places API (New)** — Powers origin and destination text search (`places:searchText`) in `server/`.
 
 ## 3. Create & Restrict Your API Keys
